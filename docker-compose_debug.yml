@@ -1,0 +1,55 @@
+# Stolen from SCopeV2
+version: "3.8"
+services:
+  web:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client/src:/usr/src/app/src
+      - ./client/static:/usr/src/app/static
+      - ./client/vite.config.ts:/usr/src/app/vite.config.ts
+      - ./client/tsconfig.json:/usr/src/app/tsconfig.json
+      - ./client/tsconfig.node.json:/usr/src/app/tsconfig.node.json
+      - ./client/index.html:/usr/src/app/index.html
+      - ./client/tailwind.config.js:/usr/src/app/tailwind.config.js
+      - ./client/components.json:/usr/src/app/components.json
+      - ./client/postcss.config.js:/usr/src/app/postcss.config.js
+      - ./data:/data
+
+    command: ["npm", "run", "dev"]
+    environment:
+      - NODE_ENV=development
+      - PORT=5173
+      - HOST=0.0.0.0
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "cd /app && /app/.venv/bin/python3 -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678 -m uvicorn --reload --host 0.0.0.0 server.main:app"]
+    ports:
+      - 8000:8000
+      - 5678:5678
+    volumes:
+      - ./data:/data
+      - ./server/server:/app/server
+  db:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+  pgadmin:
+    container_name: pgadmin4_container
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5050:80"
+
