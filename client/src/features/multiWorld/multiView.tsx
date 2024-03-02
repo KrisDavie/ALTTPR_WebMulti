@@ -1,13 +1,12 @@
-import { useLoaderData } from "react-router-dom"
+import { Params, useLoaderData } from "react-router-dom"
 import MultiEventViewer from "./multiEventViewer"
 import { useAppDispatch } from "@/app/hooks"
 import { connect, setSession } from "./multiworldSlice"
 
-export async function loader({ params }: { params: { sessionId: string } }) {
+export function loader({ params }: { params: Params }) {
   return { sessionId: params.sessionId }
 }
-
-function MultiView(props: any) {
+function MultiView() {
   const dispatch = useAppDispatch()
   const { sessionId } = useLoaderData() as { sessionId: string }
   dispatch(setSession({ sessionId }))

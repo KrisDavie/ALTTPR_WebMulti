@@ -1,64 +1,65 @@
 import { useAppSelector } from "@/app/hooks"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import React, { useEffect } from "react"
 import { useGetSessionEventsQuery } from "../api/apiSlice"
-import { useReadMemoryQuery, useReadSRAMQuery, useSendMemoryMutation } from "../sni/sniApiSlice"
-import { ReadMemoryResponse } from "@/sni/sni"
+import { useReadSRAMQuery } from "../sni/sniApiSlice"
 
 function MultiEventViewer(props: any) {
   const { sessionId } = props
-  const {
-    data: events,
-    error,
-    isLoading,
-  } = useGetSessionEventsQuery(sessionId)
+  const { isLoading } = useGetSessionEventsQuery(sessionId)
+  const multiworldEvents = useAppSelector(state => state.multiworld.events)
+  const receiving = useAppSelector(state => state.multiworld.receiving)
 
-  const { data: memData, error: memReadError, isLoading: memReadLoading } = useReadSRAMQuery({}, { pollingInterval: 1000})
-  const player_id = useAppSelector(state => state.multiworld.player_id)
+  useReadSRAMQuery({}, { pollingInterval: 1000, skip: receiving })
 
-  const [ sendMemory, result ] = useSendMemoryMutation()
+  const parseEvent = (event: any) => {
+    const { from_player, to_player, timestamp } = event
+    const event_type = event["event_type"]
+    const dt = new Date(timestamp)
 
-  // useEffect(() => {
-  //   // send the latest event
-  //   if (events && events.length > 0 && player_id !== 0) {
-  //     // Do we need to put a lock in place?
-  //     sendMemory({memLoc: "0x7e0000", memVal: events[events.length - 1].event_type})
-  //   }
-    
-  // }, [events])
+    if (event_type === "player_join") {
+      return (
+        <div>
+          [{dt.toLocaleTimeString()}] {from_player} joined the game
+        </div>
+      )
+    }
+
+    if (event_type === "player_leave") {
+      return (
+        <div>
+          [{dt.toLocaleTimeString()}] {from_player} left the game
+        </div>
+      )
+    }
+
+    if (event_type === "new_item") {
+      const { item_name } = event
+      if (from_player == -1) {
+        return
+      }
+
+      return (
+        <div>
+          [{dt.toLocaleTimeString()}] New Item: {item_name} from Player{" "}
+          {from_player} to Player {to_player}
+        </div>
+      )
+    }
+  }
 
   return (
     <>
       <h1>Multiworld Events: {sessionId}</h1>
-      <ScrollArea>
-        {isLoading || !events ? (
+      <ScrollArea className="h-72 w-4/5 rounded-md border">
+        {isLoading || !multiworldEvents ? (
           <div>Loading... ({isLoading})</div>
         ) : (
           <div>
-            {events.map(event => (
-              <div key={event.id}>
-                {event.event_type}: {JSON.stringify(event.event_data)} from{" "}
-                {event.from_player} to {event.to_player} ({event.timestamp})
-              </div>
+            {multiworldEvents.map(event => (
+              <div key={event.id}>{parseEvent(event)}</div>
             ))}
           </div>
         )}
-        {/* Loop over memData reponses and display data as hex bytes */}
-        {memReadLoading || !memData ? (
-          <div>Loading... ({memReadLoading})</div>
-        ) : (
-          <div>
-            {/* Decode bytes to utf8 */}
-            {/* get rom name */}
-            {memData.map((mem) => (
-              <div key={mem.name} className="break-words w-12/12 font-mono">
-                {mem.name}: <br/> {Array.from(mem.data, byte => byte.toString(16).padStart(2, "0")).join(" ")}
-              </div>
-            ))}
-          </div>
-        )}
-
-
       </ScrollArea>
     </>
   )

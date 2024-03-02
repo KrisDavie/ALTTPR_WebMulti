@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react"
 import { Event } from "@/app/types"
+import { EventTypes } from "@/app/types"
 
 const baseUrl = "/api/v1"
 
@@ -23,7 +24,11 @@ export const apiSlice = createApi({
     getSessionEvents: builder.query({
       query: sessionId => `/session/${sessionId}/events`,
       transformResponse: (response: Event[]) => {
-        return response
+        const transformedResponse = response.map(event => ({
+          ...event,
+          event_type: EventTypes[event.event_type as number],
+        }))
+        return transformedResponse
       },
     }),
   }),

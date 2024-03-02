@@ -1,5 +1,11 @@
-import { Middleware, UnknownAction, isAction } from "@reduxjs/toolkit"
-import { connect, setPlayerId, updateMemory } from "./multiworldSlice"
+import { Middleware, isAction } from "@reduxjs/toolkit"
+import {
+  addEvent,
+  connect,
+  setInitComplete,
+  setPlayerId,
+  updateMemory,
+} from "./multiworldSlice"
 import { sniApiSlice } from "../sni/sniApiSlice"
 
 import type { RootState } from "@/app/store"
@@ -13,6 +19,9 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
 
     let originalState = api.getState()
     if (connect.match(action)) {
+      if (socket) {
+        return next(action)
+      }
       socket = new WebSocket(
         `ws://localhost:8000/api/v1/ws/${originalState.multiworld.sessionId}`,
       )
@@ -23,22 +32,42 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       }
       socket.onmessage = event => {
         let data = JSON.parse(event.data)
+        let currentState = api.getState() as RootState
+        console.log(data)
+        if (data.type !== "new_items") {
+          api.dispatch(addEvent(data))
+        }
+
         switch (data.type) {
           case "connection_accepted":
             break
-          case "new_item":
-            const currentState = api.getState() as RootState
-            if ((data.data.from_player != currentState.multiworld.player_id) && (data.data.to_player == currentState.multiworld.player_id)) {
-              api.dispatch(
-                // @ts-expect-error
-                sniApiSlice.endpoints.sendMemory.initiate({
-                  memLoc: "0x7e0000",
-                  memVal: {"item_id": data.data.item_id, "from_player": data.data.from_player},
-                }),
-              )
-            }
+
+          case "player_info_request":
+
+          case "new_items":
+            data.data.forEach((item: any) => {
+              console.log(item)
+              api.dispatch(addEvent(item))
+            })
+            api.dispatch(
+              // @ts-expect-error
+              sniApiSlice.endpoints.sendManyItems.initiate({
+                memVals: data.data.filter(
+                  (item: any) =>
+                    item.from_player != currentState.multiworld.player_id &&
+                    item.to_player == currentState.multiworld.player_id,
+                ),
+              }),
+            )
+
             break
         }
+      }
+      // Try to reconnect if the connection is closed
+      socket.onclose = () => {
+        setTimeout(() => {
+          api.dispatch(connect())
+        }, 1000)
       }
     }
     if (updateMemory.match(action)) {
@@ -55,6 +84,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
           player_name: `Player ${action.payload}`,
         }),
       )
+      api.dispatch(setInitComplete(true))
     }
 
     return next(action)

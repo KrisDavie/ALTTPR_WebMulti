@@ -5,16 +5,18 @@ import {
   setConnectedDevice,
   setDeviceList,
   setGrpcConnected,
-  setMemData,
 } from "./sniSlice"
 import {
   DevicesClient,
   DeviceControlClient,
   DeviceMemoryClient,
 } from "@/sni/sni.client"
-import { AddressSpace, ReadMemoryRequest } from "@/sni/sni"
-import { setPlayerId, updateMemory } from "../multiWorld/multiworldSlice"
-import { parse } from "path"
+import { AddressSpace } from "@/sni/sni"
+import {
+  setPlayerId,
+  updateMemory,
+  setReceiving,
+} from "../multiWorld/multiworldSlice"
 
 const getTransport = (state: any) => {
   return new GrpcWebFetchTransport({
@@ -39,8 +41,10 @@ const sram_locs: SRAMLocs = {
   // 0xE02000: ["player_name", 0x15],
   0xf5f000: ["base", 0x256],
   0xf5f280: ["overworld", 0x82],
-  0xf5f410: ["npcs", 0x2],
+  0xf5f340: ["inventory", 0x1bd],
   0xf5f3c6: ["misc", 0x4],
+  0xf5f410: ["npcs", 0x2],
+  0xf5f4d0: ["multiinfo", 0x2],
   0xf66018: ["pots", 0x250],
   0xf66268: ["sprites", 0x250],
   0xf664b8: ["shops", 0x29],
@@ -89,13 +93,10 @@ export const sniApiSlice = createApi({
         }
       },
     }),
-    sendMemory: builder.mutation({
-      async queryFn(
-        arg: { memLoc: string; memVal: any },
-        queryApi,
-        extraOptions,
-        baseQuery,
-      ) {
+
+    sendManyItems: builder.mutation({
+      async queryFn(arg: { memVals: any }, queryApi, extraOptions, baseQuery) {
+        queryApi.dispatch(setReceiving(true))
         const state = queryApi.getState() as RootState
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
@@ -107,21 +108,110 @@ export const sniApiSlice = createApi({
           uri: connectedDevice,
         })
         let memoryMapping = memMapping.response.memoryMapping
+        let memMappingResponse
+        for (let i = 0; i < arg.memVals.length; i++) {
+          let last_item_id = 255
+          let memVal = arg.memVals[i]
+          while (last_item_id > 0) {
+            let readCurItem = await controlMem.singleRead({
+              uri: connectedDevice,
+              request: {
+                requestMemoryMapping: memoryMapping,
+                requestAddress: parseInt("f5f4d2", 16),
+                requestAddressSpace: AddressSpace.FxPakPro,
+                size: 1,
+              },
+            })
+            if (!readCurItem.response.response) {
+              return { error: "Error reading memory, no reposonse" }
+            }
+            last_item_id = readCurItem.response.response.data[0]
+            if (last_item_id === 0) {
+              break
+            }
+            // sleep
+            console.log("waiting for last item to be 0 (", last_item_id, ")")
+            await new Promise(r => setTimeout(r, 250))
+          }
+
+          memMappingResponse = await controlMem.singleWrite({
+            uri: connectedDevice,
+            request: {
+              requestMemoryMapping: memoryMapping,
+              requestAddress: parseInt("f5f4d0", 16),
+              requestAddressSpace: AddressSpace.FxPakPro,
+              data: new Uint8Array([
+                memVal.event_idx[0],
+                memVal.event_idx[1],
+                memVal.item_id,
+                memVal.from_player,
+              ]),
+            },
+          })
+        }
+        queryApi.dispatch(setReceiving(false))
+        return { data: memMappingResponse?.response.response?.requestAddress }
+      },
+    }),
+    sendMemory: builder.mutation({
+      async queryFn(
+        arg: { memLoc: string; memVal: any },
+        queryApi,
+        extraOptions,
+        baseQuery,
+      ) {
+        queryApi.dispatch(setReceiving(true))
+        const state = queryApi.getState() as RootState
+        const transport = getTransport(state)
+        let controlMem = new DeviceMemoryClient(transport)
+        let connectedDevice = state.sni.connectedDevice
+        if (!connectedDevice) {
+          return { error: "No device or memory data" }
+        }
+        let memMapping = await controlMem.mappingDetect({
+          uri: connectedDevice,
+        })
+        let memoryMapping = memMapping.response.memoryMapping
+        let last_item_id = 255
+        while (last_item_id > 0) {
+          let memMappingResponse = await controlMem.singleRead({
+            uri: connectedDevice,
+            request: {
+              requestMemoryMapping: memoryMapping,
+              requestAddress: parseInt("f5f4d2", 16),
+              requestAddressSpace: AddressSpace.FxPakPro,
+              size: 1,
+            },
+          })
+          if (!memMappingResponse.response.response) {
+            return { error: "Error reading memory, no reposonse" }
+          }
+          last_item_id = memMappingResponse.response.response.data[0]
+          if (last_item_id === 0) {
+            break
+          }
+          // sleep
+          console.log("waiting for last item to be 0 (", last_item_id, ")")
+          await new Promise(r => setTimeout(r, 250))
+        }
+
         let memMappingResponse = await controlMem.singleWrite({
           uri: connectedDevice,
           request: {
             requestMemoryMapping: memoryMapping,
-            // requestAddress: parseInt(arg.memLoc, 16),
-            requestAddress: parseInt("f5f4d0", 16),
+            requestAddress: parseInt(arg.memLoc, 16),
+            // requestAddress: parseInt("f5f4d0", 16),
             requestAddressSpace: AddressSpace.FxPakPro,
             data: new Uint8Array([
-              0,
-              1,
+              arg.memVal.event_idx[0],
+              arg.memVal.event_idx[1],
               arg.memVal.item_id,
               arg.memVal.from_player,
             ]),
           },
         })
+        queryApi.dispatch(setReceiving(false))
+
         return { data: memMappingResponse.response.response?.requestAddress }
       },
     }),
@@ -153,7 +243,7 @@ export const sniApiSlice = createApi({
           },
         })
         if (!memMappingResponse.response.response) {
-          return { error: "Error readin memory, no reposonse" }
+          return { error: "Error reading memory, no reposonse" }
         }
         return {
           requestAddress: memMappingResponse.response.response.requestAddress,
@@ -184,7 +274,7 @@ export const sniApiSlice = createApi({
         for (let [loc, [name, size]] of Object.entries(sram_locs)) {
           if (
             (name === "pots" && arg.noPots) ||
-            (name === "sprites" && arg.noEnemies) || 
+            (name === "sprites" && arg.noEnemies) ||
             (name === "rom_name" && state.multiworld.player_id !== 0)
             // (name === "rom_name" && state.multiworld.player_id !== 0)
           ) {
@@ -212,15 +302,13 @@ export const sniApiSlice = createApi({
           sram[sram_locs[res.requestAddress][0]] = Array.from(res.data)
         })
 
-        if (
-          !ingame_modes.includes(
-            sram["game_mode"][0],
-          )
-        ) {
+        if (!ingame_modes.includes(sram["game_mode"][0])) {
           return { error: "Not in game" }
         }
 
-        queryApi.dispatch(updateMemory(sram))
+        if (state.multiworld.init_complete) {
+          queryApi.dispatch(updateMemory(sram))
+        }
 
         // check if rom_arr is all 0xff
         if (

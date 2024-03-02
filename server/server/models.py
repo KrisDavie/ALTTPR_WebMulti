@@ -20,15 +20,14 @@ from .database import Base
 
 
 class EventTypes(enum.Enum):
-    create = 1
-    join = 2
+    session_create = 1
+    player_join = 2
     failed_join = 3
-    leave = 4
+    player_leave = 4
     chat = 5
     command = 6
-    item_send = 7
-    
-# event_constraint = UniqueConstraint("session_id", "from_player", "to_player", "item_id", "location", name="event_info")
+    new_item = 7
+
 
 def generate_uuid():
     return str(uuid.uuid4())
@@ -38,7 +37,6 @@ class MWSession(Base):
     __tablename__ = "mwsessions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    # id = Column(String, primary_key=True, default=generate_uuid)
 
     game_id = Column(Integer, ForeignKey("games.id"))
     session_password = Column(String, nullable=True)

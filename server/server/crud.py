@@ -5,8 +5,8 @@ from sqlalchemy import or_
 
 from . import models, schemas
 
-ignore_mask = {
-}
+ignore_mask = {}
+
 
 def get_games(db: Session, skip: int = 0, limit: int = 100):
     if limit <= 0:
@@ -58,16 +58,20 @@ def get_all_events(
     return db.query(models.Event).offset(skip).limit(limit).all()
 
 
-def get_events_for_player(db: Session, player_id: int, skip: int = 0, limit: int = 100):
+def get_events_for_player(
+    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 100
+):
     if limit <= 0:
         return (
             db.query(models.Event)
+            .filter(models.Event.session_id == session_id)
             .filter(models.Event.to_player == player_id)
             .offset(skip)
             .all()
         )
     return (
         db.query(models.Event)
+        .filter(models.Event.session_id == session_id)
         .filter(models.Event.to_player == player_id)
         .offset(skip)
         .limit(limit)
@@ -163,7 +167,13 @@ def update_sramstore(db: Session, sramstore: schemas.SRAMStoreCreate):
     except Exception as e:
         print(e)
         create_sramstore(db, sramstore)
-        return ({k: [0 for x in range(len(v))] for k, v in json.loads(sramstore.sram).items()}, json.loads(sramstore.sram))
+        return (
+            {
+                k: [0 for x in range(len(v))]
+                for k, v in json.loads(sramstore.sram).items()
+            },
+            json.loads(sramstore.sram),
+        )
 
 
 def get_player_connection_events(db: Session, session_id: str, player_id: int):
@@ -171,7 +181,12 @@ def get_player_connection_events(db: Session, session_id: str, player_id: int):
         db.query(models.Event)
         .filter(models.Event.session_id == session_id)
         .filter(models.Event.to_player == player_id)
-        .filter(or_(models.Event.event_type == models.EventTypes.join, models.Event.event_type == models.EventTypes.leave))
+        .filter(
+            or_(
+                models.Event.event_type == models.EventTypes.player_join,
+                models.Event.event_type == models.EventTypes.player_leave,
+            )
+        )
         # .all()
         .order_by(models.Event.timestamp.desc())
         .all()
