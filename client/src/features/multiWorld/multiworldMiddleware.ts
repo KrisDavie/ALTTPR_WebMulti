@@ -33,7 +33,6 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       socket.onmessage = event => {
         let data = JSON.parse(event.data)
         let currentState = api.getState() as RootState
-        console.log(data)
         if (data.type !== "new_items") {
           api.dispatch(addEvent(data))
         }
@@ -46,7 +45,6 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
 
           case "new_items":
             data.data.forEach((item: any) => {
-              console.log(item)
               api.dispatch(addEvent(item))
             })
             api.dispatch(

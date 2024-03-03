@@ -1,5 +1,8 @@
+import logging
+
 from .data import data as loc_data
 
+logger = logging.getLogger(__name__)
 
 def sram_diff(new_sram: dict, old_sram: dict) -> dict:
     return {
@@ -88,7 +91,7 @@ def get_changed_locations(sram_diff: dict, new_sram: dict) -> list[str]:
                     if new_sram[loc_group][mem_loc] & 0x40 != 0:
                         locations.append(name)
                 except KeyError:
-                    print(f"KeyError: {mem_loc}")
+                    logger.error(f"Error getting overworld location: {mem_loc}")
                     continue
 
             elif loc_group == "npcs":

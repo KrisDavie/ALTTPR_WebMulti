@@ -70,6 +70,7 @@ class Event(Base):
     from_player = Column(Integer, index=True)
     to_player = Column(Integer, index=True)
     item_id = Column(Integer, index=True)
+    item_name = Column(String, index=True, nullable=True)
     location = Column(Integer, index=True)
     event_type = Column(Enum(EventTypes), index=True)
     event_data = Column(JSON)

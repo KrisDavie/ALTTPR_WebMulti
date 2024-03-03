@@ -35,13 +35,11 @@ export const multiworldSlice = createSlice({
       state.password = action.payload.password || ""
     },
     addEvent: (state, action) => {
-      console.log(action)
       if (action.payload.type === "new_items") {
         state.events.push(...action.payload.data)
       } else {
         state.events.push(action.payload)
       }
-      console.log(state.events)
     },
     updateMemory: (state, action) => {
       state.memory = action.payload

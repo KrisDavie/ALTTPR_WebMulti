@@ -1,4 +1,5 @@
 import json
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as postgres_upsert
 from sqlalchemy import or_
@@ -7,14 +8,15 @@ from . import models, schemas
 
 ignore_mask = {}
 
+logger = logging.getLogger(__name__)
 
-def get_games(db: Session, skip: int = 0, limit: int = 100):
+def get_games(db: Session, skip: int = 0, limit: int = 0):
     if limit <= 0:
         return db.query(models.Game).offset(skip).all()
     return db.query(models.Game).offset(skip).limit(limit).all()
 
 
-def get_all_sessions(db: Session, skip: int = 0, limit: int = 100, game_id: int = None):
+def get_all_sessions(db: Session, skip: int = 0, limit: int = 0, game_id: int = None):
     if limit <= 0:
         if game_id:
             return (
@@ -36,7 +38,7 @@ def get_all_sessions(db: Session, skip: int = 0, limit: int = 100, game_id: int 
 
 
 def get_all_events(
-    db: Session, skip: int = 0, limit: int = 100, session_id: str = None
+    db: Session, skip: int = 0, limit: int = 0, session_id: str = None
 ):
     if limit <= 0:
         if session_id:
@@ -59,7 +61,7 @@ def get_all_events(
 
 
 def get_events_for_player(
-    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 100
+    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 0
 ):
     if limit <= 0:
         return (
@@ -80,7 +82,7 @@ def get_events_for_player(
 
 
 def get_events_from_player(
-    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 100
+    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 0
 ):
     if limit <= 0:
         return (
@@ -126,11 +128,6 @@ def create_session(db: Session, session: schemas.MWSessionCreate):
 
 def create_event(db: Session, event: schemas.EventCreate):
     db_event = models.Event(**event.model_dump())
-    # Create the insert event using the upsert method and IGNORE errors on conflict
-    # TODO: This skips the ORM event, can we do this with the ORM? Or can we get the event from this?
-    # db_event = postgres_upsert(models.Event).values(**event.model_dump())
-    # db_event = db_event.on_conflict_do_nothing(index_elements=["session_id", "from_player", "to_player", "item_id", "location"])
-    # db.execute(db_event)
     db.add(db_event)
     db.commit()
     db.refresh(db_event)
@@ -165,7 +162,7 @@ def update_sramstore(db: Session, sramstore: schemas.SRAMStoreCreate):
         return (old_sram, new_sram)
 
     except Exception as e:
-        print(e)
+        logger.error(f"Error updating sramstore: {e}")
         create_sramstore(db, sramstore)
         return (
             {

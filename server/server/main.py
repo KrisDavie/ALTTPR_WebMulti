@@ -1,16 +1,25 @@
 import json
-
-# from queue import Queue
 import zlib
-from typing import Annotated
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect, File, Form
 
+import logging
+
+from typing import Annotated
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Header,
+    WebSocket,
+    WebSocketDisconnect,
+    File,
+    Form,
+)
 from fastapi.websockets import WebSocketState
+from starlette import status
 
 from sqlalchemy.orm import Session
-
 from sqlalchemy import event as listen_event
-
 
 from . import crud, models, schemas
 from .database import SessionLocal, engine
@@ -25,11 +34,40 @@ app = FastAPI(
     description="A server for ALTTPR Multiworld",
     version="0.1.0",
     root_path="/api/v1",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
+logging_config = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "default",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "DEBUG",
+    },
+}
 
-models.Base.metadata.drop_all(bind=engine)
+logger = logging.getLogger("ALTTPR WebMulti")
+logging.config.dictConfig(logging_config)
+
+
+# models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
+
+ONE_MB = 1024 * 1024
 
 
 def get_db():
@@ -41,19 +79,31 @@ def get_db():
         db.close()
 
 
+async def valid_content_length(content_length: int = Header(..., lt=ONE_MB * 10)):
+    return content_length
+
+
 @app.post("/multidata")
 def create_multi_session(
     file: Annotated[bytes, File()],
     game: Annotated[str, Form()],
     password: Annotated[str, Form()] = None,
     db: Session = Depends(get_db),
+    file_size: int = Depends(valid_content_length),
 ):
     # Accept form multi-data
+
+    if len(file) > file_size:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Too large"
+            )
+
     multidata = file
     db_game = crud.get_game(db, game)
 
     if not db_game:
         db_game = crud.create_game(db, schemas.GameCreate(title=game))
+        logger.error(f"Game does not exist, creating it: {game}")
         # return {"error": "Game does not exist, please create it first"}
 
     parsed_data = json.loads(zlib.decompress(multidata).decode("utf-8"))
@@ -81,9 +131,10 @@ def create_multi_session(
         ),
     )
     if session.id:
-        print(f"Session created: {session.id}")
+        logger.info(f"Session created: {session.id}")
         return {"mw_session": session.id, "password": session.session_password}
     else:
+        logger.error(f"Failed to create session")
         return {"error": "Failed to create session"}
 
 
@@ -91,7 +142,11 @@ def create_multi_session(
 def get_session_events(
     mw_session_id: str, db: Session = Depends(get_db)
 ) -> list[schemas.Event]:
-    return crud.get_all_events(db, session_id=mw_session_id)
+    all_events = crud.get_all_events(db, session_id=mw_session_id)
+    for event in all_events:
+        if event.event_type == models.EventTypes.new_item:
+            event.item_name = loc_data.item_table[str(event.item_id)]
+    return all_events
 
 
 @app.websocket("/ws/{mw_session_id}")
@@ -101,17 +156,17 @@ async def websocket_endpoint(
     await websocket.accept()
     session = crud.get_session(db, mw_session_id)
 
+    connection_init_time = time.time()
+
     if not session:
-        await websocket.send_json({"type": "session_not_found"})
-        await websocket.close()
+        await websocket.close(reason="Session not found")
         return
 
     # Security check
     if session.session_password != None:
         password = await websocket.receive_text()
         if password != session.session_password:
-            await websocket.send_json({"type": "connection_rejected"})
-            await websocket.close()
+            await websocket.close(reason="Invalid password")
             # Log failed join event
             crud.create_event(
                 db,
@@ -120,21 +175,21 @@ async def websocket_endpoint(
                     event_type=models.EventTypes.failed_join,
                     from_player=-1,
                     to_player=-1,
-                    event_data={},
+                    event_data={"reason": "Invalid password"},
                 ),
             )
             return
-        else:
-            await websocket.send_json({"type": "connection_accepted"})
-    else:
-        await websocket.send_json({"type": "connection_accepted"})
 
+    await websocket.send_json({"type": "connection_accepted"})
     await websocket.send_json({"type": "player_info_request"})
     while True:
         try:
-
+            if time.time() - connection_init_time > 600:
+                await websocket.close(reason="Player info not received")
+                return
             player_info = await websocket.receive_json()
             if player_info["type"] == "player_info":
+                time.sleep(0.1)
                 break
         except WebSocketDisconnect:
             return
@@ -152,7 +207,7 @@ async def websocket_endpoint(
         len(conn_events) > 0
         and conn_events[0].event_type == models.EventTypes.player_join
     ):
-        print(f"Player {player_id} already joined")
+        logger.warning(f"Player {player_id} already joined")
         await websocket.close(reason="Player already joined")
         return
 
@@ -172,10 +227,7 @@ async def websocket_endpoint(
 
     multidata = session.mwdata
     multidata_locs = {tuple(d[0]): tuple(d[1]) for d in multidata["locations"]}
-    #  TODO: parse multidata and determine progressive and/or retro mode per player
-    # Adjust items send depending on modes
 
-    # events_to_send = Queue()
     events_to_send = []
     should_close = False
 
@@ -231,9 +283,7 @@ async def websocket_endpoint(
 
     try:
         while True:
-            # while not events_to_send.empty():
             if len(events_to_send) > 0:
-                # event_to_send = events_to_send.get()
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
                 events_to_send.append(
@@ -242,6 +292,14 @@ async def websocket_endpoint(
                         "data": [x["data"] for x in new_items],
                     }
                 )
+
+                logger.debug(f"Player {player_id} - Sending {len(events_to_send)} events")
+                if len(new_items) > 0:
+                    items_per_player = {
+                        p: len([x for x in new_items if x["data"]["to_player"] == p])
+                        for p in set([x["data"]["to_player"] for x in new_items])
+                    }
+                    logger.debug(f"Player {player_id} - Also sending {len(new_items)} new items ({items_per_player})")
 
                 for event in events_to_send:
                     await websocket.send_json(event)
@@ -276,15 +334,15 @@ async def websocket_endpoint(
                     loc_id = int(loc_data.lookup_name_to_id[location])
 
                     if (loc_id, player_id) not in multidata_locs:
-                        print(
-                            f"Location not in multidata_locs: Player {player_id} - {location} [{loc_id}]"
+                        logger.error(
+                            f"Player {player_id} - Location not in multidata_locs: {location} [{loc_id}]"
                         )
                         continue
                     item_id, item_player = multidata_locs[(loc_id, player_id)]
 
                     if loc_id not in checked_locations:
-                        print(
-                            f"New Location Checked (Player {player_id}): {location} [{loc_id}]"
+                        logger.info(
+                            f"Player {player_id} - New Location Checked: {location} [{loc_id}]"
                         )
 
                         crud.create_event(
@@ -295,6 +353,7 @@ async def websocket_endpoint(
                                 from_player=player_id,
                                 to_player=item_player,
                                 item_id=item_id,
+                                item_name=loc_data.item_table[str(item_id)],
                                 location=loc_id,
                                 event_data={},
                             ),
@@ -304,8 +363,12 @@ async def websocket_endpoint(
                 # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
 
                 to_player_events = crud.get_events_for_player(db, session.id, player_id)
-                # player_inv = sram.get_inventory(new_sram)
-                last_event = int.from_bytes(new_sram["multiinfo"])
+                last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
+                if len(to_player_events) > 0:
+                    logger.debug(
+                        f"Player {player_id} - Last event: {last_event}. Total events: {len(to_player_events)}, last event: {
+                            {k: v for k, v in to_player_events[-1].__dict__.items() if not k.startswith("_")}}"
+                 )
 
                 for event in to_player_events:
                     if event.id <= last_event:
@@ -316,11 +379,9 @@ async def websocket_endpoint(
                     if event.from_player == player_id or event.to_player != player_id:
                         continue
                     item_name = loc_data.item_table[str(event.item_id)]
-                    # if event.id <= new_sram['multiinfo']
 
-                    # else:
-                    print(
-                        f"Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
+                    logger.info(
+                        f"Player {player_id} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
                     )
                     # events_to_send.put(
                     events_to_send.append(

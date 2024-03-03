@@ -44,7 +44,7 @@ const sram_locs: SRAMLocs = {
   0xf5f340: ["inventory", 0x1bd],
   0xf5f3c6: ["misc", 0x4],
   0xf5f410: ["npcs", 0x2],
-  0xf5f4d0: ["multiinfo", 0x2],
+  0xf5f4d0: ["multiinfo", 0x4],
   0xf66018: ["pots", 0x250],
   0xf66268: ["sprites", 0x250],
   0xf664b8: ["shops", 0x29],
@@ -129,8 +129,6 @@ export const sniApiSlice = createApi({
             if (last_item_id === 0) {
               break
             }
-            // sleep
-            console.log("waiting for last item to be 0 (", last_item_id, ")")
             await new Promise(r => setTimeout(r, 250))
           }
 
@@ -190,8 +188,6 @@ export const sniApiSlice = createApi({
           if (last_item_id === 0) {
             break
           }
-          // sleep
-          console.log("waiting for last item to be 0 (", last_item_id, ")")
           await new Promise(r => setTimeout(r, 250))
         }
 
