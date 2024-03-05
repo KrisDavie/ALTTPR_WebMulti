@@ -30,7 +30,6 @@ class EventBase(BaseModel):
     from_player: int
     to_player: int
     item_id: int
-    item_name: str | None = None
     location: int
 
 

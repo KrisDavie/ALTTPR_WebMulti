@@ -39,9 +39,13 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
 
         switch (data.type) {
           case "connection_accepted":
+          case "player_info_request":
             break
 
-          case "player_info_request":
+          case "player_join":
+          case "player_leave":
+            api.dispatch(addEvent(data))
+            break
 
           case "new_items":
             data.data.forEach((item: any) => {
@@ -57,7 +61,6 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
                 ),
               }),
             )
-
             break
         }
       }

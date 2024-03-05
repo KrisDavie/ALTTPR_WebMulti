@@ -69,6 +69,7 @@ def get_changed_locations(sram_diff: dict, new_sram: dict) -> list[str]:
             if loc_group in ["base", "pots", "sprites"]:
                 if loc_group in ["base"]:
                     room_id = int(mem_loc) // 2
+                    mem_loc = room_id * 2
                 elif loc_group in ["pots", "sprites"]:
                     room_id = (
                         int(mem_loc) if int(mem_loc) % 2 == 0 else int(mem_loc) - 1

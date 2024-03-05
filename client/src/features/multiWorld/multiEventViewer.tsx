@@ -12,7 +12,7 @@ function MultiEventViewer(props: any) {
   useReadSRAMQuery({}, { pollingInterval: 1000, skip: receiving })
 
   const parseEvent = (event: any) => {
-    const { from_player, to_player, timestamp } = event
+    const { from_player, to_player, timestamp, event_data } = event
     const event_type = event["event_type"]
     const dt = new Date(timestamp)
 
@@ -33,7 +33,7 @@ function MultiEventViewer(props: any) {
     }
 
     if (event_type === "new_item") {
-      const { item_name } = event
+      const { item_name, location_name } = event_data
       if (from_player == -1) {
         return
       }
@@ -41,7 +41,7 @@ function MultiEventViewer(props: any) {
       return (
         <div>
           [{dt.toLocaleTimeString()}] New Item: {item_name} from Player{" "}
-          {from_player} to Player {to_player}
+          {from_player} to Player {to_player} ({location_name})
         </div>
       )
     }

@@ -145,7 +145,10 @@ def get_session_events(
     all_events = crud.get_all_events(db, session_id=mw_session_id)
     for event in all_events:
         if event.event_type == models.EventTypes.new_item:
-            event.item_name = loc_data.item_table[str(event.item_id)]
+            if event.event_data == None:
+                event.event_data = {}
+            event.event_data['item_name'] = loc_data.item_table[str(event.item_id)]
+            event.event_data['location_name'] = loc_data.lookup_id_to_name[str(event.location)]
     return all_events
 
 
@@ -268,9 +271,10 @@ async def websocket_endpoint(
             },
         }
         if target_event.event_type == models.EventTypes.new_item:
-            new_event["data"]["item_name"] = loc_data.item_table[
-                str(target_event.item_id)
-            ]
+            if target_event.event_data == None:
+                target_event.event_data = {}
+            target_event.event_data['item_name'] = loc_data.item_table[str(target_event.item_id)]
+            target_event.event_data['location_name'] = loc_data.lookup_id_to_name[str(target_event.location)]
             new_event["data"]["event_idx"] = list(target_event.id.to_bytes(2, "big"))
 
         events_to_send.append(new_event)
