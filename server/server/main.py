@@ -152,6 +152,133 @@ def get_session_events(
     return all_events
 
 
+@app.get("/session/{mw_session_id}/players")
+def get_session_players(
+    mw_session_id: str, db: Session = Depends(get_db)
+) -> list[str]:
+    session = crud.get_session(db, mw_session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.mwdata["names"][0]
+
+
+@app.post("/admin/{mw_session_id}/send")
+def admin_send_event(
+    mw_session_id: str,
+    send_data: dict,
+    db: Session = Depends(get_db),
+):
+    session = crud.get_session(db, mw_session_id)
+    if not session:
+        return {"error": "Session not found"}
+    if session.session_password != None:
+        if send_data["password"] != session.session_password:
+            return {"error": "Invalid password"}
+    if send_data["event_type"] == "send_single":
+        new_event = crud.create_event(
+            db,
+            schemas.EventCreate(
+                session_id=session.id,
+                event_type=models.EventTypes.new_item,
+                from_player=0,
+                to_player=send_data["to_players"],
+                item_id=send_data["item_id"],
+                location=0,
+                event_data={
+                    "item_name": loc_data.item_table[str(send_data["item_id"])],
+                    "location_name": loc_data.lookup_id_to_name['0'],
+                    "reason": "admin_send"
+
+                },
+            ),
+        )
+    elif send_data["event_type"] == "send_multi":
+        for player in send_data["to_players"]:
+            new_event = crud.create_event(
+                db,
+                schemas.EventCreate(
+                    session_id=session.id,
+                    event_type=models.EventTypes.new_item,
+                    from_player=0,
+                    to_player=player,
+                    item_id=send_data["item_id"],
+                    location=0,
+                    event_data={
+                    "item_name": loc_data.item_table[str(send_data["item_id"])],
+                    "location_name": loc_data.lookup_id_to_name['0'],
+                    "reason": "admin_send"
+                    },
+                ),
+            )
+    return new_event
+
+
+@app.post("/session/{mw_session_id}/player_forfeit")
+async def player_forfeit(
+    mw_session_id: str,
+    send_data: dict,
+    db: Session = Depends(get_db),
+) -> dict:
+    session = crud.get_session(db, mw_session_id)
+    if not session:
+        return {"error": "Session not found"}
+    
+    # TODO: Maybe add some security here. 
+    # Potentially a unique code generated per player when the session is made?
+    player_id = send_data["player_id"]
+    player_events = crud.get_events_from_player(db, session.id, player_id)
+    all_player_items = [
+        x for x in session.mwdata["locations"] if x[0][1] == player_id
+    ]
+    all_player_items = {
+        x[0][0]: x[1] for x in all_player_items
+    }
+
+    response = {
+        "found_item_count": 0,
+        "forfeit_item_count": 0 
+        }  
+    for sent_event in player_events:
+        if sent_event.event_type == models.EventTypes.player_forfeit:
+            return {"error": "Player already forfeited"}
+        if sent_event.event_type != models.EventTypes.new_item:
+            continue
+        if sent_event.location in all_player_items:
+            all_player_items.pop(sent_event.location)
+            response["found_item_count"] += 1
+        else:
+            logger.error(f"Player {player_id} - Sent item not in player's items: {sent_event.location}")
+    
+    new_event = crud.create_event(
+        db,
+        schemas.EventCreate(
+            session_id=session.id,
+            event_type=models.EventTypes.player_forfeit,
+            from_player=player_id,
+            to_player=-1,
+            item_id=-1,
+            location=-1,
+            event_data={"player_id": player_id},
+        ),
+    )
+    response["event_id"] = new_event.id, 
+    for location, item_info in all_player_items.items():
+        response["forfeit_item_count"] += 1
+        crud.create_event(
+            db,
+            schemas.EventCreate(
+                session_id=session.id,
+                event_type=models.EventTypes.new_item,
+                from_player=player_id,
+                to_player=item_info[1],
+                item_id=item_info[0],
+                location=location,
+                event_data={"reason": "forfeit"},
+            ),
+        )
+
+    return response
+
 @app.websocket("/ws/{mw_session_id}")
 async def websocket_endpoint(
     websocket: WebSocket, mw_session_id: str, db: Session = Depends(get_db)
@@ -357,9 +484,11 @@ async def websocket_endpoint(
                                 from_player=player_id,
                                 to_player=item_player,
                                 item_id=item_id,
-                                item_name=loc_data.item_table[str(item_id)],
                                 location=loc_id,
-                                event_data={},
+                                event_data={
+                                    "item_name": loc_data.item_table[str(item_id)],
+                                    "location_name": location,
+                                    },
                             ),
                         )
                         checked_locations.add(loc_id)
@@ -399,11 +528,13 @@ async def websocket_endpoint(
                                 "event_type": event.event_type.name,
                                 "from_player": event.from_player,
                                 "to_player": event.to_player,
-                                "item_name": item_name,
                                 "event_idx": list(event.id.to_bytes(2, "big")),
-                                "item_name": item_name,
                                 "item_id": loc_data.item_table_reversed[item_name],
                                 "location": event.location,
+                                "event_data": {
+                                    "item_name": item_name,
+                                    "location_name": loc_data.lookup_id_to_name[str(event.location)],
+                                },
                             },
                         }
                     )

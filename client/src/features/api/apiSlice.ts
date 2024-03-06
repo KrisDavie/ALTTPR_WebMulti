@@ -31,7 +31,47 @@ export const apiSlice = createApi({
         return transformedResponse
       },
     }),
+    getPlayers: builder.query({
+      query: sessionId => `/session/${sessionId}/players`,
+    }),
+    sendForfeit: builder.mutation({
+      query: ({ sessionId, playerId }) => ({
+        url: `/session/${sessionId}/player_forfeit`,
+        method: "POST",
+        body: {
+          player_id: playerId,
+        },
+      }),
+    }),
+    sendNewItems: builder.mutation({
+      query: ({
+        sessionId,
+        itemId,
+        players,
+        password,
+      }: {
+        sessionId: string
+        itemId: number
+        players: number[]
+        password: string | undefined
+      }) => ({
+        url: `/admin/${sessionId}/send`,
+        method: "POST",
+        body: {
+          event_type: players.length > 1 ? "send_multi" : "send_single",
+          to_players: players.length > 1 ? players : players[0],
+          item_id: itemId,
+          password: password,
+        },
+      }),
+    }),
   }),
 })
 
-export const { useUploadMultiDataMutation, useGetSessionEventsQuery } = apiSlice
+export const {
+  useUploadMultiDataMutation,
+  useSendForfeitMutation,
+  useGetPlayersQuery,
+  useGetSessionEventsQuery,
+  useSendNewItemsMutation,
+} = apiSlice

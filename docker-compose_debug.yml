@@ -24,6 +24,9 @@ services:
       - NODE_ENV=development
       - PORT=5173
       - HOST=0.0.0.0
+    depends_on:
+      - db
+      - server
   server:
     build:
       context: ./server
@@ -35,6 +38,8 @@ services:
     volumes:
       - ./data:/data
       - ./server/server:/app/server
+    depends_on:
+      - db
   db:
     image: postgres:latest
     environment:
@@ -52,4 +57,6 @@ services:
       PGADMIN_DEFAULT_PASSWORD: root
     ports:
       - "5050:80"
+    depends_on:
+      - db
 

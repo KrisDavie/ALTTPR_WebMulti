@@ -27,6 +27,7 @@ class EventTypes(enum.Enum):
     chat = 5
     command = 6
     new_item = 7
+    player_forfeit = 8
 
 
 def generate_uuid():

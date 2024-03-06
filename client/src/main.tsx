@@ -28,6 +28,11 @@ const router = createBrowserRouter([
       element: <MultiView />,
       loader: multiViewLoader
     },
+    {
+      path: "/multiAdmin/:sessionId",
+      element: <MultiView adminMode />,
+      loader: multiViewLoader
+    }
     ]}
 
 ])

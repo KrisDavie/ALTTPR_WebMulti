@@ -25,7 +25,7 @@ for kind, kind_data in location_info.items():
     for name, room in kind_data.items():
         location_info_reversed[kind][room] = name
 
-
+lookup_id_to_name['0'] = "Admin Send"
 lookup_name_to_id = {v: k for k, v in lookup_id_to_name.items()}
 item_table_reversed = {v: k for k, v in item_table.items()}
 
