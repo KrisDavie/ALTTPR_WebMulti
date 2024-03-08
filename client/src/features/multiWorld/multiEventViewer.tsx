@@ -44,14 +44,14 @@ function MultiEventViewer(props: any) {
 
       return (
         <div>
-          [{dt.toLocaleTimeString()}] New Item: {item_name} from {from_player_name} to {to_player_name} ({location_name})
+          [{dt.toLocaleTimeString()}] New Item: {item_name} from <span className="font-bold">{from_player_name}</span> to <span className="font-bold">{to_player_name}</span> ({location_name})
         </div>
       )
     }
   }
 
   return (
-    <>
+    <div className="flex flex-col">
       <h1>Multiworld Events: {sessionId}</h1>
       <ScrollArea className="h-72 w-4/5 rounded-md border">
         {isLoading || !multiworldEvents ? (
@@ -64,7 +64,7 @@ function MultiEventViewer(props: any) {
           </div>
         )}
       </ScrollArea>
-    </>
+    </div>
   )
 }
 

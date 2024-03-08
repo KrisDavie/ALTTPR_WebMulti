@@ -13,7 +13,7 @@ import {
 } from "@/sni/sni.client"
 import { AddressSpace } from "@/sni/sni"
 import {
-  setPlayerId,
+  setPlayerInfo,
   updateMemory,
   setReceiving,
 } from "../multiWorld/multiworldSlice"
@@ -75,7 +75,7 @@ export const sniApiSlice = createApi({
           }
           return { data: devices }
         } catch (e) {
-          return { error: e }
+          return { error: 'Error getting devices.' }
         }
       },
     }),
@@ -316,7 +316,7 @@ export const sniApiSlice = createApi({
             .map(byte => String.fromCharCode(byte))
             .join("")
             .split("_")[2]
-          queryApi.dispatch(setPlayerId(parseInt(player_id)))
+          queryApi.dispatch(setPlayerInfo({rom_name: sram["rom_name"], player_id: parseInt(player_id)}))
         }
         return {
           data: memMappingResponse.response.responses.map(res => {

@@ -3,7 +3,7 @@ import {
   addEvent,
   connect,
   setInitComplete,
-  setPlayerId,
+  setPlayerInfo,
   updateMemory,
 } from "./multiworldSlice"
 import { sniApiSlice } from "../sni/sniApiSlice"
@@ -65,10 +65,15 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         }
       }
       // Try to reconnect if the connection is closed
-      socket.onclose = () => {
-        setTimeout(() => {
-          api.dispatch(connect())
-        }, 1000)
+      socket.onclose = event => {
+        if (event.reason !== "") {
+          alert("Connection closed: " + event.reason)
+          return
+        } else {
+          setTimeout(() => {
+            api.dispatch(connect())
+          }, 1000)
+        }
       }
     }
     if (updateMemory.match(action)) {
@@ -77,12 +82,13 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       )
     }
 
-    if (setPlayerId.match(action)) {
+    if (setPlayerInfo.match(action)) {
       socket.send(
         JSON.stringify({
           type: "player_info",
-          player_id: action.payload,
+          player_id: action.payload.player_id,
           player_name: `Player ${action.payload}`,
+          rom_name: action.payload.rom_name,
         }),
       )
       api.dispatch(setInitComplete(true))

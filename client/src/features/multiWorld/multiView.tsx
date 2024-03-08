@@ -19,9 +19,10 @@ function MultiView(props: any) {
   dispatch(setSession({ sessionId }))
   dispatch(connect())
   return (
-    <>
+    <div className="flex flex-col">
       <MultiEventViewer sessionId={sessionId} />
       <Button
+      className="w-32 mt-2"
         disabled={playerId === undefined || sendForfeitResult.isSuccess}
         onClick={() => sendForfeit({sessionId, playerId})}
       >
@@ -29,7 +30,7 @@ function MultiView(props: any) {
       </Button>
 
       {adminMode && <ItemSend sessionId={sessionId} />}
-    </>
+    </div>
   )
 }
 

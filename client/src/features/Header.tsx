@@ -27,7 +27,7 @@ function Header() {
   useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
 
   return (
-    <div>
+    <div className="flex flex-col h-12">
       <div className="flex absolute top-2 right-2">
         <Link to="/">
           <Button variant="outline" size="icon">

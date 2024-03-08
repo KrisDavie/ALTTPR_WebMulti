@@ -330,6 +330,14 @@ async def websocket_endpoint(
     except KeyError:
         await websocket.close(reason="Player info not received")
         return
+    
+    multidata = session.mwdata
+
+    mw_rom_names = [x[2] for x in multidata['roms']]
+
+    if player_info['rom_name'] not in mw_rom_names:
+        await websocket.close(reason="Incorrect ROM found")
+        return
 
     # Get all events for the session of either join or leave for this player
     conn_events = crud.get_player_connection_events(db, session.id, player_id)
@@ -355,7 +363,6 @@ async def websocket_endpoint(
         ),
     )
 
-    multidata = session.mwdata
     multidata_locs = {tuple(d[0]): tuple(d[1]) for d in multidata["locations"]}
 
     events_to_send = []
@@ -497,11 +504,11 @@ async def websocket_endpoint(
 
                 to_player_events = crud.get_events_for_player(db, session.id, player_id)
                 last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
-                if len(to_player_events) > 0:
-                    logger.debug(
-                        f"Player {player_id} - Last event: {last_event}. Total events: {len(to_player_events)}, last event: {
-                            {k: v for k, v in to_player_events[-1].__dict__.items() if not k.startswith("_")}}"
-                 )
+                # if len(to_player_events) > 0:
+                #     logger.debug(
+                #         f"Player {player_id} - Last event: {last_event}. Total events: {len(to_player_events)}, last event: {
+                #             {k: v for k, v in to_player_events[-1].__dict__.items() if not k.startswith("_")}}"
+                #  )
 
                 for event in to_player_events:
                     if event.id <= last_event:

@@ -7,6 +7,7 @@ type SliceState = {
   password: string
   events: Event[]
   memory?: string[]
+  rom_name?: string
   player_id?: number
   receiving?: boolean
   init_complete?: boolean
@@ -17,6 +18,7 @@ const initialState: SliceState = {
   password: "",
   events: [],
   memory: [],
+  rom_name: "",
   player_id: 0,
   receiving: false,
   init_complete: false,
@@ -44,8 +46,9 @@ export const multiworldSlice = createSlice({
     updateMemory: (state, action) => {
       state.memory = action.payload
     },
-    setPlayerId: (state, action) => {
-      state.player_id = action.payload
+    setPlayerInfo: (state, action) => {
+      state.player_id = action.payload.player_id
+      state.rom_name = action.payload.rom_name
     },
     setReceiving: (state, action) => {
       state.receiving = action.payload
@@ -73,7 +76,7 @@ export const {
   setSession,
   addEvent,
   updateMemory,
-  setPlayerId,
+  setPlayerInfo,
   setInitComplete,
   sendPlayerInfo,
   setReceiving,
