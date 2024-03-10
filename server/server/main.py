@@ -273,7 +273,7 @@ async def player_forfeit(
                 to_player=item_info[1],
                 item_id=item_info[0],
                 location=location,
-                event_data={"reason": "forfeit"},
+                event_data={"reason": "forfeit", "item_name": loc_data.item_table[str(item_info[0])], "location_name": loc_data.lookup_id_to_name[str(location)]},
             ),
         )
 
@@ -334,6 +334,8 @@ async def websocket_endpoint(
     multidata = session.mwdata
 
     mw_rom_names = [x[2] for x in multidata['roms']]
+    player_names = [x[0] for x in multidata['names'][0]]
+    player_name = player_names[player_id]
 
     if player_info['rom_name'] not in mw_rom_names:
         await websocket.close(reason="Incorrect ROM found")
@@ -345,7 +347,7 @@ async def websocket_endpoint(
         len(conn_events) > 0
         and conn_events[0].event_type == models.EventTypes.player_join
     ):
-        logger.warning(f"Player {player_id} already joined")
+        logger.warning(f"{player_name} already joined")
         await websocket.close(reason="Player already joined")
         return
 
@@ -431,13 +433,13 @@ async def websocket_endpoint(
                     }
                 )
 
-                logger.debug(f"Player {player_id} - Sending {len(events_to_send)} events")
+                logger.debug(f"{player_name} - Sending {len(events_to_send)} events")
                 if len(new_items) > 0:
                     items_per_player = {
                         p: len([x for x in new_items if x["data"]["to_player"] == p])
                         for p in set([x["data"]["to_player"] for x in new_items])
                     }
-                    logger.debug(f"Player {player_id} - Also sending {len(new_items)} new items ({items_per_player})")
+                    logger.debug(f"{player_name} - Also sending {len(new_items)} new items ({items_per_player})")
 
                 for event in events_to_send:
                     await websocket.send_json(event)
@@ -473,14 +475,14 @@ async def websocket_endpoint(
 
                     if (loc_id, player_id) not in multidata_locs:
                         logger.error(
-                            f"Player {player_id} - Location not in multidata_locs: {location} [{loc_id}]"
+                            f"{player_name} - Location not in multidata_locs: {location} [{loc_id}]"
                         )
                         continue
                     item_id, item_player = multidata_locs[(loc_id, player_id)]
 
                     if loc_id not in checked_locations:
                         logger.info(
-                            f"Player {player_id} - New Location Checked: {location} [{loc_id}]"
+                            f"{player_name} - New Location Checked: {location} [{loc_id}]"
                         )
 
                         crud.create_event(
@@ -521,7 +523,7 @@ async def websocket_endpoint(
                     item_name = loc_data.item_table[str(event.item_id)]
 
                     logger.info(
-                        f"Player {player_id} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
+                        f"{player_name} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
                     )
                     # events_to_send.put(
                     events_to_send.append(

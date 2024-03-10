@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import SniSettings from "./sni/sniSettings"
-import { AlertCircleIcon, HomeIcon, XCircleIcon } from "lucide-react"
+import { AlertCircleIcon, CheckIcon, HomeIcon, XCircleIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useAppSelector } from "@/app/hooks"
 import { selectAvailableDevices } from "./sni/sniSlice"
@@ -48,7 +48,7 @@ function Header() {
                     ) : devices.length === 0 ? (
                       <AlertCircleIcon color="yellow" />
                     ) : (
-                      ""
+                      <CheckIcon color="green" />
                     )}
                   </Button>
                 </TooltipTrigger>
