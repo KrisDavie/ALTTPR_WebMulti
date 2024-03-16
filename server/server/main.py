@@ -370,6 +370,8 @@ async def websocket_endpoint(
     events_to_send = []
     should_close = False
 
+    await websocket.send_json({"type": "init_success"})
+
     # This listens for new events and sends them to the client, it's never actually called itself
     @listen_event.listens_for(models.Event, "after_insert")
     def after_event(mapper, connection, target_event):

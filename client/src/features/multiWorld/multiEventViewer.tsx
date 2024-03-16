@@ -15,10 +15,18 @@ function MultiEventViewer(props: any) {
   const parseEvent = (event: any) => {
     const { from_player, to_player, timestamp, event_data } = event
     const event_type = event["event_type"]
-    const dt = new Date(timestamp)
+    const dt = new Date(timestamp * 1000)
     const from_player_name = from_player != 0 ? players[from_player - 1] : "Server"
     const to_player_name = players[to_player - 1]
 
+
+    if (event_type === "init_success") {
+      return (
+        <div>
+          [{dt.toLocaleTimeString()}] Successfully connected to the multiworld server as {from_player_name}
+        </div>
+      )
+    }
 
     if (event_type === "player_join") {
       return (
@@ -32,6 +40,14 @@ function MultiEventViewer(props: any) {
       return (
         <div>
           [{dt.toLocaleTimeString()}] {from_player_name} left the game
+        </div>
+      )
+    }
+
+    if (event_type === "player_forfeit") {
+      return (
+        <div>
+          [{dt.toLocaleTimeString()}] {from_player_name} forfeited
         </div>
       )
     }

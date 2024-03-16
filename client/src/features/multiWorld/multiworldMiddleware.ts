@@ -2,6 +2,7 @@ import { Middleware, isAction } from "@reduxjs/toolkit"
 import {
   addEvent,
   connect,
+  reconnect,
   setInitComplete,
   setPlayerInfo,
   updateMemory,
@@ -11,13 +12,23 @@ import { sniApiSlice } from "../sni/sniApiSlice"
 import type { RootState } from "@/app/store"
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
-  let socket: WebSocket
+  let socket: WebSocket | undefined
   return next => action => {
     if (!isAction(action)) {
       return next(action)
     }
 
     let originalState = api.getState()
+
+    if (reconnect.match(action)) {
+      if (socket) {
+        socket.close(4216, "Reconnecting")
+      }
+      socket = undefined
+      api.dispatch(connect())
+      return next(action)
+    }
+
     if (connect.match(action)) {
       if (socket) {
         return next(action)
@@ -27,7 +38,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       )
       if (originalState.multiworld.password) {
         socket.onopen = () => {
-          socket.send(originalState.multiworld.password)
+          socket?.send(originalState.multiworld.password)
         }
       }
       socket.onmessage = event => {
@@ -42,19 +53,30 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
           case "player_info_request":
             break
 
+          case "init_success":
+            api.dispatch(addEvent({
+              type: "init_success",
+              from_player: currentState.multiworld.player_id,
+              to_player: 0,
+              timestamp: Date.now(),
+              event_data: {},
+            }))
+            break
+
           case "player_join":
           case "player_leave":
             api.dispatch(addEvent(data))
             break
 
           case "new_items":
-            data.data.forEach((item: any) => {
+            const sorted_data = data.data.sort((a: any, b: any) => a.id - b.id)
+            sorted_data.forEach((item: any) => {
               api.dispatch(addEvent(item))
             })
             api.dispatch(
               // @ts-expect-error
               sniApiSlice.endpoints.sendManyItems.initiate({
-                memVals: data.data.filter(
+                memVals: sorted_data.filter(
                   (item: any) =>
                     item.from_player != currentState.multiworld.player_id &&
                     item.to_player == currentState.multiworld.player_id,
@@ -77,13 +99,13 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       }
     }
     if (updateMemory.match(action)) {
-      socket.send(
+      socket?.send(
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
     }
 
     if (setPlayerInfo.match(action)) {
-      socket.send(
+      socket?.send(
         JSON.stringify({
           type: "player_info",
           player_id: action.payload.player_id,

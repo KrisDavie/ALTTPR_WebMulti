@@ -1,11 +1,7 @@
 import type { RootState } from "@/app/store"
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react"
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport"
-import {
-  setConnectedDevice,
-  setDeviceList,
-  setGrpcConnected,
-} from "./sniSlice"
+import { setConnectedDevice, setDeviceList, setGrpcConnected } from "./sniSlice"
 import {
   DevicesClient,
   DeviceControlClient,
@@ -16,6 +12,7 @@ import {
   setPlayerInfo,
   updateMemory,
   setReceiving,
+  reconnect,
 } from "../multiWorld/multiworldSlice"
 
 const getTransport = (state: any) => {
@@ -75,7 +72,7 @@ export const sniApiSlice = createApi({
           }
           return { data: devices }
         } catch (e) {
-          return { error: 'Error getting devices.' }
+          return { error: "Error getting devices." }
         }
       },
     }),
@@ -302,9 +299,24 @@ export const sniApiSlice = createApi({
           return { error: "Not in game" }
         }
 
+        // Rom has changed, reconnect the websocket
+        if (
+          sram["rom_name"] &&
+          !sram["rom_name"].every(byte => byte === 0xff) &&
+          sram["rom_name"]
+            .map(byte => String.fromCharCode(byte))
+            .join("")
+            .split("_")[2] !== state.multiworld.rom_name
+        ) {
+          queryApi.dispatch(reconnect())
+          return { error: "Rom changed" }
+        }
+
         if (state.multiworld.init_complete) {
           queryApi.dispatch(updateMemory(sram))
         }
+
+        // TODO: Add a check for it the rom changes and restart the websocket connection with the new playerID
 
         // check if rom_arr is all 0xff
         if (
@@ -316,7 +328,12 @@ export const sniApiSlice = createApi({
             .map(byte => String.fromCharCode(byte))
             .join("")
             .split("_")[2]
-          queryApi.dispatch(setPlayerInfo({rom_name: sram["rom_name"], player_id: parseInt(player_id)}))
+          queryApi.dispatch(
+            setPlayerInfo({
+              rom_name: sram["rom_name"],
+              player_id: parseInt(player_id),
+            }),
+          )
         }
         return {
           data: memMappingResponse.response.responses.map(res => {
