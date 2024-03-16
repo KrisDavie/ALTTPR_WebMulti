@@ -16,8 +16,8 @@ function MultiEventViewer(props: any) {
     const { from_player, to_player, timestamp, event_data } = event
     const event_type = event["event_type"]
     const dt = new Date(timestamp * 1000)
-    const from_player_name = from_player != 0 ? players[from_player - 1] : "Server"
-    const to_player_name = players[to_player - 1]
+    const from_player_name = from_player >= 1 ? players[from_player - 1] : "Server"
+    const to_player_name = to_player >= 1 ? players[to_player - 1] : "Unknown Player"
 
 
     if (event_type === "init_success") {
