@@ -149,6 +149,7 @@ def get_session_events(
                 event.event_data = {}
             event.event_data['item_name'] = loc_data.item_table[str(event.item_id)]
             event.event_data['location_name'] = loc_data.lookup_id_to_name[str(event.location)]
+        event.event_data['timestamp'] = int(time.mktime(event.timestamp.timetuple()))
     return all_events
 
 
@@ -334,8 +335,8 @@ async def websocket_endpoint(
     multidata = session.mwdata
 
     mw_rom_names = [x[2] for x in multidata['roms']]
-    player_names = [x[0] for x in multidata['names'][0]]
-    player_name = player_names[player_id]
+    player_names = [x for x in multidata['names'][0]]
+    player_name = player_names[player_id - 1]
 
     if player_info['rom_name'] not in mw_rom_names:
         await websocket.close(reason="Incorrect ROM found")

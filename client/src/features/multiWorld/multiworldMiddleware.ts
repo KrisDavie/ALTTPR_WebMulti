@@ -7,9 +7,12 @@ import {
   setPlayerInfo,
   updateMemory,
 } from "./multiworldSlice"
+import { nanoid } from '@reduxjs/toolkit'
 import { sniApiSlice } from "../sni/sniApiSlice"
 
 import type { RootState } from "@/app/store"
+
+const types_to_adjust = ["new_items", "init_success"]
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
   let socket: WebSocket | undefined
@@ -44,28 +47,28 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       socket.onmessage = event => {
         let data = JSON.parse(event.data)
         let currentState = api.getState() as RootState
-        if (data.type !== "new_items") {
+        if (!data.id) {
+          data.id = nanoid()
+        }
+        if (!types_to_adjust.includes(data.type)) {
           api.dispatch(addEvent(data))
         }
 
         switch (data.type) {
           case "connection_accepted":
           case "player_info_request":
+          case "player_join":
+          case "player_leave":
             break
 
           case "init_success":
             api.dispatch(addEvent({
-              type: "init_success",
+              event_type: "init_success",
               from_player: currentState.multiworld.player_id,
               to_player: 0,
               timestamp: Date.now(),
               event_data: {},
             }))
-            break
-
-          case "player_join":
-          case "player_leave":
-            api.dispatch(addEvent(data))
             break
 
           case "new_items":
@@ -83,6 +86,9 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
                 ),
               }),
             )
+            break
+          default:
+            console.log("Unknown event type: " + data.type)
             break
         }
       }

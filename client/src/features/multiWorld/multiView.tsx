@@ -5,6 +5,7 @@ import { connect, setSession } from "./multiworldSlice"
 import { useSendForfeitMutation } from "../api/apiSlice"
 import ItemSend from "./itemSend"
 import { Button } from "@/components/ui/button"
+import { useEffect } from "react"
 
 export function loader({ params }: { params: Params }) {
   return { sessionId: params.sessionId }
@@ -16,8 +17,12 @@ function MultiView(props: any) {
   const { sessionId } = useLoaderData() as { sessionId: string }
   const [sendForfeit, sendForfeitResult] = useSendForfeitMutation()
 
-  dispatch(setSession({ sessionId }))
-  dispatch(connect())
+  useEffect(() => {
+    dispatch(setSession({ sessionId }))
+    dispatch(connect())
+  }
+  , [sessionId])
+
   return (
     <div className="flex flex-col">
       <MultiEventViewer sessionId={sessionId} />

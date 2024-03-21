@@ -301,6 +301,7 @@ export const sniApiSlice = createApi({
 
         // Rom has changed, reconnect the websocket
         if (
+          state.multiworld.rom_name &&
           sram["rom_name"] &&
           !sram["rom_name"].every(byte => byte === 0xff) &&
           sram["rom_name"]

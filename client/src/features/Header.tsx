@@ -21,15 +21,40 @@ import {
 function Header() {
   const grpcConnected = useAppSelector(state => state.sni.grpcConnected)
   const devices: string[] = useAppSelector(selectAvailableDevices)
+  const sessionId: string | undefined = useAppSelector(
+    state => state.multiworld.sessionId,
+  )
+  const player_id: number | undefined = useAppSelector(
+    state => state.multiworld.player_id,
+  )
+  const initComplete: boolean | undefined = useAppSelector(
+    state => state.multiworld.init_complete,
+  )
   const connectedDevice: string | undefined = useAppSelector(
     state => state.sni.connectedDevice,
   )
   useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
 
+  function getMultiworldStatus() {
+    if (!sessionId) {
+      return "No Session"
+    }
+    if (!initComplete) {
+      return "Connecting..."
+    }
+    if (!player_id) {
+      return "Connected to " + sessionId
+    }
+    return "Connected to " + sessionId + " as Player " + player_id
+  }
+
   return (
     <div className="flex flex-col h-12">
+      <div className="flex absolute top-2 left-2">
+        <b>{"Multiworld Session:"}</b><span>- {getMultiworldStatus()}</span>
+      </div>
       <div className="flex absolute top-2 right-2">
-        <Link to="/">
+        <Link to="/" reloadDocument>
           <Button variant="outline" size="icon">
             <HomeIcon />
           </Button>

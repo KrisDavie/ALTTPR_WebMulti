@@ -45,7 +45,7 @@ function MultiServer(props: any) {
       password: data.password,
     })
 
-    navigate(`/multi/${res.data.mw_session}`)
+    navigate(`/multiAdmin/${res.data.mw_session}`)
 
   }
 
