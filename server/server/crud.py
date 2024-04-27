@@ -62,7 +62,7 @@ def get_all_events(
 
 def get_events_for_player(
     db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 0
-):
+) -> list[models.Event]:
     if limit <= 0:
         return (
             db.query(models.Event)

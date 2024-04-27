@@ -68,6 +68,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
               to_player: 0,
               timestamp: Date.now(),
               event_data: {},
+              id: nanoid(),
             }))
             break
 
