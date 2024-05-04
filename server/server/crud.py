@@ -177,7 +177,7 @@ def get_player_connection_events(db: Session, session_id: str, player_id: int):
     return (
         db.query(models.Event)
         .filter(models.Event.session_id == session_id)
-        .filter(models.Event.to_player == player_id)
+        .filter(models.Event.from_player == player_id)
         .filter(
             or_(
                 models.Event.event_type == models.EventTypes.player_join,

@@ -13,7 +13,7 @@ import { sniApiSlice } from "../sni/sniApiSlice"
 
 import type { RootState } from "@/app/store"
 
-const types_to_adjust = ["new_items", "init_success", "chat"]
+const types_to_adjust = ["new_items", "init_success", "chat", "player_join", "player_leave"]
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
   let socket: WebSocket | undefined
@@ -58,8 +58,29 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         switch (data.type) {
           case "connection_accepted":
           case "player_info_request":
+            break
+
           case "player_join":
+            api.dispatch(addEvent({
+              event_type: "player_join",
+              from_player: data.data.from_player,
+              to_player: -1,
+              timestamp: data.data.timestamp * 1000,
+              event_data: {},
+              id: nanoid(),
+            }))
+            break
+
           case "player_leave":
+            console.log('player_leave')
+            api.dispatch(addEvent({
+              event_type: "player_leave",
+              from_player: data.data.from_player,
+              to_player: -1,
+              timestamp: data.data.timestamp * 1000,
+              event_data: {},
+              id: nanoid(),
+            }))
             break
 
           case "init_success":
@@ -78,7 +99,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
               event_type: "chat",
               from_player: data.data.from_player,
               to_player: -1,
-              timestamp: Date.now(),
+              timestamp: data.data.timestamp * 1000,
               event_data: { message: data.data.event_data.message },
               id: nanoid(),
             }))
