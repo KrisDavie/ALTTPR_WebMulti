@@ -17,7 +17,8 @@ import { Label } from "@/components/ui/label"
 function MultiEventViewer(props: any) {
   const { sessionId } = props
   const { isLoading } = useGetSessionEventsQuery(sessionId)
-  const { isLoading: playersLoading, data: players } = useGetPlayersQuery(sessionId)
+  const { isLoading: playersLoading, data: players } =
+    useGetPlayersQuery(sessionId)
   const multiworldEvents = useAppSelector(state => state.multiworld.events)
   const receiving = useAppSelector(state => state.multiworld.receiving)
   const currentPlayer = useAppSelector(state => state.multiworld.player_id)
@@ -62,7 +63,7 @@ function MultiEventViewer(props: any) {
     } else if (
       currentPlayer &&
       event_type === "new_item" &&
-      from_player !== currentPlayer &&
+      to_player !== currentPlayer &&
       !showOtherItems
     ) {
       return
@@ -217,7 +218,7 @@ function MultiEventViewer(props: any) {
                     System messages
                   </Label>
                 </div>
-                <div className="grid grid-cols-5 items-center gap-1">
+                {/* <div className="grid grid-cols-5 items-center gap-1">
                   <Input
                     type="checkbox"
                     id="same_player"
@@ -228,7 +229,7 @@ function MultiEventViewer(props: any) {
                   <Label htmlFor="same_player" className="col-span-4">
                     Items to and from the same player
                   </Label>
-                </div>
+                </div> */}
               </div>
             </div>
           </PopoverContent>
