@@ -33,6 +33,7 @@ export const multiworldSlice = createSlice({
     disconnect: state => {},
     reconnect: state => {},
     sendPlayerInfo: (state, action) => {},
+    sendChatMessage: (state, action) => {},
     setSession: (state, action) => {
       state.sessionId = action.payload.sessionId
       state.password = action.payload.password || ""
@@ -77,6 +78,7 @@ export const {
   reconnect,
   setSession,
   addEvent,
+  sendChatMessage,
   updateMemory,
   setPlayerInfo,
   setInitComplete,

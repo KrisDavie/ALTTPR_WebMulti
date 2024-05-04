@@ -3,6 +3,7 @@ import {
   addEvent,
   connect,
   reconnect,
+  sendChatMessage,
   setInitComplete,
   setPlayerInfo,
   updateMemory,
@@ -12,7 +13,7 @@ import { sniApiSlice } from "../sni/sniApiSlice"
 
 import type { RootState } from "@/app/store"
 
-const types_to_adjust = ["new_items", "init_success"]
+const types_to_adjust = ["new_items", "init_success", "chat"]
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
   let socket: WebSocket | undefined
@@ -72,9 +73,21 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             }))
             break
 
+          case "chat":
+            api.dispatch(addEvent({
+              event_type: "chat",
+              from_player: currentState.multiworld.player_id,
+              to_player: -1,
+              timestamp: Date.now(),
+              event_data: { message: data.data.event_data.message },
+              id: nanoid(),
+            }))
+            break
+
           case "new_items":
             const sorted_data = data.data.sort((a: any, b: any) => a.id - b.id)
             sorted_data.forEach((item: any) => {
+              item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
             api.dispatch(
@@ -110,6 +123,16 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
     }
+
+    if (sendChatMessage.match(action)) {
+      socket?.send(
+        JSON.stringify({
+          type: "chat",
+          data: action.payload.message,
+        }),
+      )
+    }
+      
 
     if (setPlayerInfo.match(action)) {
       socket?.send(

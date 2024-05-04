@@ -24,7 +24,7 @@ function MultiView(props: any) {
   , [sessionId])
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col ml-2">
       <MultiEventViewer sessionId={sessionId} />
       <Button
       className="w-32 mt-2"

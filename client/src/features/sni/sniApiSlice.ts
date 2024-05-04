@@ -279,10 +279,6 @@ export const sniApiSlice = createApi({
           sram[sram_locs[res.requestAddress][0]] = Array.from(res.data)
         })
 
-        if (!ingame_modes.includes(sram["game_mode"][0])) {
-          return { error: "Not in game" }
-        }
-
         // Rom has changed, reconnect the websocket
         if (
           state.multiworld.rom_name &&
@@ -295,10 +291,6 @@ export const sniApiSlice = createApi({
         ) {
           queryApi.dispatch(reconnect())
           return { error: "Rom changed" }
-        }
-
-        if (state.multiworld.init_complete) {
-          queryApi.dispatch(updateMemory(sram))
         }
 
         // TODO: Add a check for it the rom changes and restart the websocket connection with the new playerID
@@ -320,6 +312,15 @@ export const sniApiSlice = createApi({
             }),
           )
         }
+
+        if (!ingame_modes.includes(sram["game_mode"][0])) {
+          return { error: "Not in game" }
+        }
+
+        if (state.multiworld.init_complete) {
+          queryApi.dispatch(updateMemory(sram))
+        }
+        
         return {
           data: multiReadResponse.response.responses.map(res => {
             return {

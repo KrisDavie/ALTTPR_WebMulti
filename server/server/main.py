@@ -429,12 +429,13 @@ async def websocket_endpoint(
             if len(events_to_send) > 0:
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
-                events_to_send.append(
-                    {
-                        "type": "new_items",
-                        "data": [x["data"] for x in new_items],
-                    }
-                )
+                if len(new_items) > 0:
+                    events_to_send.append(
+                        {
+                            "type": "new_items",
+                            "data": [x["data"] for x in new_items],
+                        }
+                    )
 
                 logger.debug(f"{player_name} - Sending {len(events_to_send)} events")
                 if len(new_items) > 0:
@@ -451,6 +452,21 @@ async def websocket_endpoint(
 
             if payload["type"] == "ping":
                 await websocket.send_json({"type": "pong"})
+                continue
+
+            if payload["type"] == "chat":
+                crud.create_event(
+                    db,
+                    schemas.EventCreate(
+                        session_id=session.id,
+                        event_type=models.EventTypes.chat,
+                        from_player=player_id,
+                        to_player=-1,
+                        item_id=-1,
+                        location=-1,
+                        event_data={"message": payload["data"]},
+                    ),
+                )
                 continue
 
             if payload["type"] == "update_memory":
