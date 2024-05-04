@@ -283,7 +283,7 @@ export const sniApiSlice = createApi({
         if (
           state.multiworld.rom_name &&
           sram["rom_name"] &&
-          !sram["rom_name"].every(byte => byte === 0xff) &&
+          ['DR', 'OR'].includes(sram["rom_name"].slice(0, 2).map(byte => String.fromCharCode(byte)).join("")) &&
           sram["rom_name"]
             .map(byte => String.fromCharCode(byte))
             .join("")
@@ -298,7 +298,7 @@ export const sniApiSlice = createApi({
         // check if rom_arr is all 0xff
         if (
           sram["rom_name"] &&
-          !sram["rom_name"].every(byte => byte === 0xff) &&
+          ['DR', 'OR'].includes(sram["rom_name"].slice(0, 2).map(byte => String.fromCharCode(byte)).join("")) &&
           state.multiworld.player_id === 0
         ) {
           const player_id = sram["rom_name"]
