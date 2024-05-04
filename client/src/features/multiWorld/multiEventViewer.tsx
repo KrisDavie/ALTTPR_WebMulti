@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 function MultiEventViewer(props: any) {
   const { sessionId } = props
   const { isLoading } = useGetSessionEventsQuery(sessionId)
-  const { data: players } = useGetPlayersQuery(sessionId)
+  const { isLoading: playersLoading, data: players } = useGetPlayersQuery(sessionId)
   const multiworldEvents = useAppSelector(state => state.multiworld.events)
   const receiving = useAppSelector(state => state.multiworld.receiving)
   const currentPlayer = useAppSelector(state => state.multiworld.player_id)
@@ -233,7 +233,7 @@ function MultiEventViewer(props: any) {
             </div>
           </PopoverContent>
         </Popover>
-        {isLoading || !multiworldEvents ? (
+        {isLoading || playersLoading || !multiworldEvents ? (
           <div>Loading... ({isLoading})</div>
         ) : (
           <div key="multi_events" ref={eventContainerRef}>

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import zlib
 
@@ -448,7 +449,11 @@ async def websocket_endpoint(
                 for event in events_to_send:
                     await websocket.send_json(event)
                 events_to_send = []
-            payload = await websocket.receive_json()
+            try:
+                payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.5)
+            except asyncio.TimeoutError:
+                continue
+
 
             if payload["type"] == "ping":
                 await websocket.send_json({"type": "pong"})

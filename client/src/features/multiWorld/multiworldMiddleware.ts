@@ -76,7 +76,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
           case "chat":
             api.dispatch(addEvent({
               event_type: "chat",
-              from_player: currentState.multiworld.player_id,
+              from_player: data.data.from_player,
               to_player: -1,
               timestamp: Date.now(),
               event_data: { message: data.data.event_data.message },
