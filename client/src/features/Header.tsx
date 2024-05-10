@@ -47,6 +47,9 @@ function Header() {
     if (!player_id) {
       return "Connected to " + sessionId
     }
+    if (playersLoading) {
+      return "Loading Players..."
+    }
     return "Connected to " + sessionId + " as " + players[player_id - 1]
   }
 

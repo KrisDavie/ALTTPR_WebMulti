@@ -414,9 +414,10 @@ async def websocket_endpoint(
             target_event.event_data["location_name"] = loc_data.lookup_id_to_name[
                 str(target_event.location)
             ]
-            new_event["data"]["event_idx"] = list(
-                target_event.to_player_idx.to_bytes(2, "big")
-            )
+            if target_event.to_player != target_event.from_player: 
+                new_event["data"]["event_idx"] = list(
+                    target_event.to_player_idx.to_bytes(2, "big")
+                )
 
         events_to_send.append(new_event)
 
@@ -432,50 +433,72 @@ async def websocket_endpoint(
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
                 if len(new_items) > 0:
+                    new_items = sorted(new_items, key=lambda x: x["data"]["id"])
                     # Here we make sure that no item events are missed, to_player_idx should ALWAYS be sequential
-                    try:
-                        last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
-                    except NameError:
-                        last_event = -1
-                    from_others_events = [x for x in new_items if "to_player_idx" in x["data"]]
-                    lowest_event = min([x["data"]["to_player_idx"] for x in from_others_events] + [last_event + 1])
-                    if lowest_event > last_event + 1:
-                        extra_events = crud.get_items_for_player_from_others(
-                            db,
-                            session.id,
-                            player_id,
-                            skip=last_event,
-                            limit=lowest_event - last_event - 1,
-                        )
-                        for event in extra_events:
-                            item_name = loc_data.item_table[str(event.item_id)]
-                            events_to_send.append(
-                                {
-                                    "type": "new_item",
-                                    "data": {
-                                        "id": event.id,
-                                        "timestamp": int(
-                                            time.mktime(event.timestamp.timetuple())
-                                        ),
-                                        "event_type": event.event_type.name,
-                                        "from_player": event.from_player,
-                                        "to_player": event.to_player,
-                                        "event_idx": list(
-                                            event.to_player_idx.to_bytes(2, "big")
-                                        ),
-                                        "item_id": loc_data.item_table_reversed[
-                                            item_name
-                                        ],
-                                        "location": event.location,
-                                        "event_data": {
-                                            "item_name": item_name,
-                                            "location_name": loc_data.lookup_id_to_name[
-                                                str(event.location)
-                                            ],
-                                        },
-                                    },
-                                }
+                    from_others_events = [
+                        x for x in new_items if "to_player_idx" in x["data"]
+                    ]
+                    if len(from_others_events) > 0:
+                        try:
+                            last_event = int.from_bytes(
+                                new_sram["multiinfo"][:2], "big"
                             )
+                        except NameError:
+                            last_event = 0
+                        lowest_event = min(
+                            [x["data"]["to_player_idx"] for x in from_others_events]
+                        )
+                        highest_event = max(
+                            [x["data"]["to_player_idx"] for x in from_others_events]
+                        )
+                        extra_events = []
+
+                        if (
+                            (highest_event - lowest_event)
+                            != (len(from_others_events) - 1)
+                        ) or (lowest_event > (last_event + 1)):
+                            logger.error(
+                                f"{player_name} - Missing events between {last_event}, {lowest_event} and {highest_event} ({len(from_others_events)} events found)"
+                            )
+                            extra_events = crud.get_items_for_player_from_others(
+                                db,
+                                session.id,
+                                player_id,
+                                skip=last_event,
+                                limit=highest_event - last_event + 1,
+                            )
+                            # Reset new_items because we're just going to get everything again
+                            new_items = []
+
+                            for event in extra_events:
+                                item_name = loc_data.item_table[str(event.item_id)]
+                                new_items.append(
+                                    {
+                                        "type": "new_item",
+                                        "data": {
+                                            "id": event.id,
+                                            "timestamp": int(
+                                                time.mktime(event.timestamp.timetuple())
+                                            ),
+                                            "event_type": event.event_type.name,
+                                            "from_player": event.from_player,
+                                            "to_player": event.to_player,
+                                            "event_idx": list(
+                                                event.to_player_idx.to_bytes(2, "big")
+                                            ),
+                                            "item_id": loc_data.item_table_reversed[
+                                                item_name
+                                            ],
+                                            "location": event.location,
+                                            "event_data": {
+                                                "item_name": item_name,
+                                                "location_name": loc_data.lookup_id_to_name[
+                                                    str(event.location)
+                                                ],
+                                            },
+                                        },
+                                    }
+                                )
                     events_to_send.append(
                         {
                             "type": "new_items",
@@ -483,8 +506,6 @@ async def websocket_endpoint(
                         }
                     )
 
-                logger.debug(f"{player_name} - Sending {len(events_to_send)} events")
-                if len(new_items) > 0:
                     items_per_player = {
                         p: len([x for x in new_items if x["data"]["to_player"] == p])
                         for p in set([x["data"]["to_player"] for x in new_items])
@@ -493,6 +514,7 @@ async def websocket_endpoint(
                         f"{player_name} - Also sending {len(new_items)} new items ({items_per_player})"
                     )
 
+                logger.debug(f"{player_name} - Sending {len(events_to_send)} events")
                 for event in events_to_send:
                     await websocket.send_json(event)
                 events_to_send = []
