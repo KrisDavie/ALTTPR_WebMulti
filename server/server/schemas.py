@@ -29,6 +29,7 @@ class EventBase(BaseModel):
     event_data: dict | None = None
     from_player: int
     to_player: int
+    to_player_idx: int | None = None
     item_id: int
     location: int
 

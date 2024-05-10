@@ -39,25 +39,6 @@ export const sniMiddleware: Middleware<{}, RootState> =
         let controlClient = new DeviceControlClient(transport)
         originalState.sni.connectedDevice && await controlClient.resetSystem({ uri: originalState.sni.connectedDevice })
         break
-      case "sni/sendMemory":
-        let controlMem = new DeviceMemoryClient(transport)
-        if (! originalState.sni.memData || !originalState.sni.connectedDevice )  {
-          break
-        }
-        let memMapping = await controlMem.mappingDetect(
-          { uri: originalState.sni.connectedDevice })
-
-        let r = await controlMem.singleWrite({
-          uri: originalState.sni.connectedDevice,
-          request: {
-            requestAddress: parseInt('f5f4d0', 16), // originalState.sni.memLocation,
-            requestAddressSpace: AddressSpace.FxPakPro,
-            requestMemoryMapping: memMapping.response.memoryMapping,
-            data: originalState.sni.memData,
-          }
-        })
-        break
-
     }
     return result
   }

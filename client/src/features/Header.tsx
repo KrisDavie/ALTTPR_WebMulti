@@ -17,6 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useGetPlayersQuery } from "./api/apiSlice"
 
 function Header() {
   const grpcConnected = useAppSelector(state => state.sni.grpcConnected)
@@ -34,6 +35,7 @@ function Header() {
     state => state.sni.connectedDevice,
   )
   useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
+  const { isLoading: playersLoading, data: players } = useGetPlayersQuery(sessionId)
 
   function getMultiworldStatus() {
     if (!sessionId) {
@@ -45,7 +47,7 @@ function Header() {
     if (!player_id) {
       return "Connected to " + sessionId
     }
-    return "Connected to " + sessionId + " as Player " + player_id
+    return "Connected to " + sessionId + " as " + players[player_id - 1]
   }
 
   return (

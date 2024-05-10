@@ -95,9 +95,9 @@ def create_multi_session(
     # Accept form multi-data
 
     if len(file) > file_size:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Too large"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Too large"
+        )
 
     multidata = file
     db_game = crud.get_game(db, game)
@@ -148,16 +148,16 @@ def get_session_events(
         if event.event_type == models.EventTypes.new_item:
             if event.event_data == None:
                 event.event_data = {}
-            event.event_data['item_name'] = loc_data.item_table[str(event.item_id)]
-            event.event_data['location_name'] = loc_data.lookup_id_to_name[str(event.location)]
-        event.event_data['timestamp'] = int(time.mktime(event.timestamp.timetuple()))
+            event.event_data["item_name"] = loc_data.item_table[str(event.item_id)]
+            event.event_data["location_name"] = loc_data.lookup_id_to_name[
+                str(event.location)
+            ]
+        event.event_data["timestamp"] = int(time.mktime(event.timestamp.timetuple()))
     return all_events
 
 
 @app.get("/session/{mw_session_id}/players")
-def get_session_players(
-    mw_session_id: str, db: Session = Depends(get_db)
-) -> list[str]:
+def get_session_players(mw_session_id: str, db: Session = Depends(get_db)) -> list[str]:
     session = crud.get_session(db, mw_session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -188,9 +188,8 @@ def admin_send_event(
                 location=0,
                 event_data={
                     "item_name": loc_data.item_table[str(send_data["item_id"])],
-                    "location_name": loc_data.lookup_id_to_name['0'],
-                    "reason": "admin_send"
-
+                    "location_name": loc_data.lookup_id_to_name["0"],
+                    "reason": "admin_send",
                 },
             ),
         )
@@ -206,9 +205,9 @@ def admin_send_event(
                     item_id=send_data["item_id"],
                     location=0,
                     event_data={
-                    "item_name": loc_data.item_table[str(send_data["item_id"])],
-                    "location_name": loc_data.lookup_id_to_name['0'],
-                    "reason": "admin_send"
+                        "item_name": loc_data.item_table[str(send_data["item_id"])],
+                        "location_name": loc_data.lookup_id_to_name["0"],
+                        "reason": "admin_send",
                     },
                 ),
             )
@@ -224,22 +223,15 @@ async def player_forfeit(
     session = crud.get_session(db, mw_session_id)
     if not session:
         return {"error": "Session not found"}
-    
-    # TODO: Maybe add some security here. 
+
+    # TODO: Maybe add some security here.
     # Potentially a unique code generated per player when the session is made?
     player_id = send_data["player_id"]
     player_events = crud.get_events_from_player(db, session.id, player_id)
-    all_player_items = [
-        x for x in session.mwdata["locations"] if x[0][1] == player_id
-    ]
-    all_player_items = {
-        x[0][0]: x[1] for x in all_player_items
-    }
+    all_player_items = [x for x in session.mwdata["locations"] if x[0][1] == player_id]
+    all_player_items = {x[0][0]: x[1] for x in all_player_items}
 
-    response = {
-        "found_item_count": 0,
-        "forfeit_item_count": 0 
-        }  
+    response = {"found_item_count": 0, "forfeit_item_count": 0}
     for sent_event in player_events:
         if sent_event.event_type == models.EventTypes.player_forfeit:
             return {"error": "Player already forfeited"}
@@ -249,8 +241,10 @@ async def player_forfeit(
             all_player_items.pop(sent_event.location)
             response["found_item_count"] += 1
         else:
-            logger.error(f"Player {player_id} - Sent item not in player's items: {sent_event.location}")
-    
+            logger.error(
+                f"Player {player_id} - Sent item not in player's items: {sent_event.location}"
+            )
+
     new_event = crud.create_event(
         db,
         schemas.EventCreate(
@@ -263,7 +257,7 @@ async def player_forfeit(
             event_data={"player_id": player_id},
         ),
     )
-    response["event_id"] = new_event.id, 
+    response["event_id"] = (new_event.id,)
     for location, item_info in all_player_items.items():
         response["forfeit_item_count"] += 1
         crud.create_event(
@@ -275,11 +269,16 @@ async def player_forfeit(
                 to_player=item_info[1],
                 item_id=item_info[0],
                 location=location,
-                event_data={"reason": "forfeit", "item_name": loc_data.item_table[str(item_info[0])], "location_name": loc_data.lookup_id_to_name[str(location)]},
+                event_data={
+                    "reason": "forfeit",
+                    "item_name": loc_data.item_table[str(item_info[0])],
+                    "location_name": loc_data.lookup_id_to_name[str(location)],
+                },
             ),
         )
 
     return response
+
 
 @app.websocket("/ws/{mw_session_id}")
 async def websocket_endpoint(
@@ -332,14 +331,14 @@ async def websocket_endpoint(
     except KeyError:
         await websocket.close(reason="Player info not received")
         return
-    
+
     multidata = session.mwdata
 
-    mw_rom_names = [x[2] for x in multidata['roms']]
-    player_names = [x for x in multidata['names'][0]]
+    mw_rom_names = [x[2] for x in multidata["roms"]]
+    player_names = [x for x in multidata["names"][0]]
     player_name = player_names[player_id - 1]
 
-    if player_info['rom_name'] not in mw_rom_names:
+    if player_info["rom_name"] not in mw_rom_names:
         await websocket.close(reason="Incorrect ROM found")
         return
 
@@ -387,10 +386,6 @@ async def websocket_endpoint(
             should_close = True
             return
 
-        # TODO
-        # Here we need to deal with all of the possible commands.
-        # For items, distinguish between displaying an event and obtaining an item
-        # events_to_send.put(
         if (
             target_event.event_type == models.EventTypes.new_item
             and target_event.to_player == player_id
@@ -413,9 +408,15 @@ async def websocket_endpoint(
         if target_event.event_type == models.EventTypes.new_item:
             if target_event.event_data == None:
                 target_event.event_data = {}
-            target_event.event_data['item_name'] = loc_data.item_table[str(target_event.item_id)]
-            target_event.event_data['location_name'] = loc_data.lookup_id_to_name[str(target_event.location)]
-            new_event["data"]["event_idx"] = list(target_event.id.to_bytes(2, "big"))
+            target_event.event_data["item_name"] = loc_data.item_table[
+                str(target_event.item_id)
+            ]
+            target_event.event_data["location_name"] = loc_data.lookup_id_to_name[
+                str(target_event.location)
+            ]
+            new_event["data"]["event_idx"] = list(
+                target_event.to_player_idx.to_bytes(2, "big")
+            )
 
         events_to_send.append(new_event)
 
@@ -431,6 +432,50 @@ async def websocket_endpoint(
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
                 if len(new_items) > 0:
+                    # Here we make sure that no item events are missed, to_player_idx should ALWAYS be sequential
+                    try:
+                        last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
+                    except NameError:
+                        last_event = -1
+                    from_others_events = [x for x in new_items if "to_player_idx" in x["data"]]
+                    lowest_event = min([x["data"]["to_player_idx"] for x in from_others_events] + [last_event + 1])
+                    if lowest_event > last_event + 1:
+                        extra_events = crud.get_items_for_player_from_others(
+                            db,
+                            session.id,
+                            player_id,
+                            skip=last_event,
+                            limit=lowest_event - last_event - 1,
+                        )
+                        for event in extra_events:
+                            item_name = loc_data.item_table[str(event.item_id)]
+                            events_to_send.append(
+                                {
+                                    "type": "new_item",
+                                    "data": {
+                                        "id": event.id,
+                                        "timestamp": int(
+                                            time.mktime(event.timestamp.timetuple())
+                                        ),
+                                        "event_type": event.event_type.name,
+                                        "from_player": event.from_player,
+                                        "to_player": event.to_player,
+                                        "event_idx": list(
+                                            event.to_player_idx.to_bytes(2, "big")
+                                        ),
+                                        "item_id": loc_data.item_table_reversed[
+                                            item_name
+                                        ],
+                                        "location": event.location,
+                                        "event_data": {
+                                            "item_name": item_name,
+                                            "location_name": loc_data.lookup_id_to_name[
+                                                str(event.location)
+                                            ],
+                                        },
+                                    },
+                                }
+                            )
                     events_to_send.append(
                         {
                             "type": "new_items",
@@ -444,7 +489,9 @@ async def websocket_endpoint(
                         p: len([x for x in new_items if x["data"]["to_player"] == p])
                         for p in set([x["data"]["to_player"] for x in new_items])
                     }
-                    logger.debug(f"{player_name} - Also sending {len(new_items)} new items ({items_per_player})")
+                    logger.debug(
+                        f"{player_name} - Also sending {len(new_items)} new items ({items_per_player})"
+                    )
 
                 for event in events_to_send:
                     await websocket.send_json(event)
@@ -453,7 +500,6 @@ async def websocket_endpoint(
                 payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.5)
             except asyncio.TimeoutError:
                 continue
-
 
             if payload["type"] == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -521,35 +567,21 @@ async def websocket_endpoint(
                                 event_data={
                                     "item_name": loc_data.item_table[str(item_id)],
                                     "location_name": location,
-                                    },
+                                },
                             ),
                         )
                         checked_locations.add(loc_id)
 
                 # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
-
-                to_player_events = crud.get_events_for_player(db, session.id, player_id)
                 last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
-                # if len(to_player_events) > 0:
-                #     logger.debug(
-                #         f"Player {player_id} - Last event: {last_event}. Total events: {len(to_player_events)}, last event: {
-                #             {k: v for k, v in to_player_events[-1].__dict__.items() if not k.startswith("_")}}"
-                #  )
-
+                to_player_events = crud.get_items_for_player_from_others(
+                    db, session.id, player_id, skip=last_event
+                )
                 for event in to_player_events:
-                    if event.id <= last_event:
-                        continue
-                    if event.event_type != models.EventTypes.new_item:
-                        continue
-                    # Don't send players items from their own games
-                    if event.from_player == player_id or event.to_player != player_id:
-                        continue
                     item_name = loc_data.item_table[str(event.item_id)]
-
                     logger.info(
                         f"{player_name} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
                     )
-                    # events_to_send.put(
                     events_to_send.append(
                         {
                             "type": "new_item",
@@ -561,12 +593,16 @@ async def websocket_endpoint(
                                 "event_type": event.event_type.name,
                                 "from_player": event.from_player,
                                 "to_player": event.to_player,
-                                "event_idx": list(event.id.to_bytes(2, "big")),
+                                "event_idx": list(
+                                    event.to_player_idx.to_bytes(2, "big")
+                                ),
                                 "item_id": loc_data.item_table_reversed[item_name],
                                 "location": event.location,
                                 "event_data": {
                                     "item_name": item_name,
-                                    "location_name": loc_data.lookup_id_to_name[str(event.location)],
+                                    "location_name": loc_data.lookup_id_to_name[
+                                        str(event.location)
+                                    ],
                                 },
                             },
                         }

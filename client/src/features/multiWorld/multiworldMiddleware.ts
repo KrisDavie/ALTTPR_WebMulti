@@ -72,7 +72,6 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "player_leave":
-            console.log('player_leave')
             api.dispatch(addEvent({
               event_type: "player_leave",
               from_player: data.data.from_player,

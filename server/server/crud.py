@@ -80,6 +80,29 @@ def get_events_for_player(
         .all()
     )
 
+def get_items_for_player_from_others(
+    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 0
+) -> list[models.Event]:
+    if limit <= 0:
+        return (
+            db.query(models.Event)
+            .filter(models.Event.session_id == session_id)
+            .filter(models.Event.to_player == player_id)
+            .filter(models.Event.event_type == models.EventTypes.new_item)
+            .filter(models.Event.from_player != player_id)
+            .offset(skip)
+            .all()
+        )
+    return (
+        db.query(models.Event)
+        .filter(models.Event.session_id == session_id)
+        .filter(models.Event.to_player == player_id)
+        .filter(models.Event.event_type == models.EventTypes.new_item)
+        .filter(models.Event.from_player != player_id)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 def get_events_from_player(
     db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 0
@@ -128,9 +151,32 @@ def create_session(db: Session, session: schemas.MWSessionCreate):
 
 def create_event(db: Session, event: schemas.EventCreate):
     db_event = models.Event(**event.model_dump())
-    db.add(db_event)
-    db.commit()
-    db.refresh(db_event)
+    # If this is a new item, find the last item sent to the player from other players and increment the to_player_idx by 1
+    if db_event.event_type == models.EventTypes.new_item:
+        if not db_event.to_player == db_event.from_player:
+            last_item = (
+                db.query(models.Event)
+                .filter(models.Event.session_id == event.session_id)
+                .filter(models.Event.to_player == event.to_player)
+                .filter(models.Event.from_player != event.to_player)
+                .filter(models.Event.event_type == models.EventTypes.new_item)
+                .order_by(models.Event.timestamp.desc())
+                .first()
+            )
+            if last_item:
+                db_event.to_player_idx = last_item.to_player_idx + 1
+            else:
+                db_event.to_player_idx = 1
+    while True:
+        try:
+            db.add(db_event)
+            db.commit()
+            db.refresh(db_event)
+            break
+        except Exception as e:
+            logger.error(f"Error creating event: {e}")
+            db.rollback()
+            db_event.to_player_idx += 1
     return db_event
 
 
@@ -172,6 +218,13 @@ def update_sramstore(db: Session, sramstore: schemas.SRAMStoreCreate):
             json.loads(sramstore.sram),
         )
 
+def get_sramstore(db: Session, session_id: str, player_id: int):
+    return (
+        db.query(models.SRAMStore)
+        .filter(models.SRAMStore.session_id == session_id)
+        .filter(models.SRAMStore.player == player_id)
+        .first()
+    )
 
 def get_player_connection_events(db: Session, session_id: str, player_id: int):
     return (

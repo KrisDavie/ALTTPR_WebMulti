@@ -144,62 +144,6 @@ export const sniApiSlice = createApi({
         return { data: writeResponse?.response.response?.requestAddress }
       },
     }),
-    sendMemory: builder.mutation({
-      async queryFn(
-        arg: { memLoc: string; memVal: any },
-        queryApi,
-        extraOptions,
-        baseQuery,
-      ) {
-        queryApi.dispatch(setReceiving(true))
-        const state = queryApi.getState() as RootState
-        const transport = getTransport(state)
-        let controlMem = new DeviceMemoryClient(transport)
-        let connectedDevice = state.sni.connectedDevice
-        if (!connectedDevice) {
-          return { error: "No device or memory data" }
-        }
-        let last_item_id = 255
-        while (last_item_id > 0) {
-          let readResponse = await controlMem.singleRead({
-            uri: connectedDevice,
-            request: {
-              requestMemoryMapping: MemoryMapping.LoROM,
-              requestAddress: parseInt("f5f4d2", 16),
-              requestAddressSpace: AddressSpace.FxPakPro,
-              size: 1,
-            },
-          })
-          if (!readResponse.response.response) {
-            return { error: "Error reading memory, no reposonse" }
-          }
-          last_item_id = readResponse.response.response.data[0]
-          if (last_item_id === 0) {
-            break
-          }
-          await new Promise(r => setTimeout(r, 250))
-        }
-
-        let writeReponse = await controlMem.singleWrite({
-          uri: connectedDevice,
-          request: {
-            requestMemoryMapping: MemoryMapping.LoROM,
-            requestAddress: parseInt(arg.memLoc, 16),
-            // requestAddress: parseInt("f5f4d0", 16),
-            requestAddressSpace: AddressSpace.FxPakPro,
-            data: new Uint8Array([
-              arg.memVal.event_idx[0],
-              arg.memVal.event_idx[1],
-              arg.memVal.item_id,
-              arg.memVal.from_player,
-            ]),
-          },
-        })
-        queryApi.dispatch(setReceiving(false))
-
-        return { data: writeReponse.response.response?.requestAddress }
-      },
-    }),
     readMemory: builder.query({
       async queryFn(
         arg: { memLoc: string; size: number },
@@ -247,6 +191,30 @@ export const sniApiSlice = createApi({
         if (!connectedDevice) {
           return { error: "No device selected" }
         }
+        // Safety check to make sure we're done receiving at the cost of some latency
+        let last_item_id = 255
+        while (last_item_id > 0) {
+          let readResponse = await controlMem.singleRead({
+            uri: connectedDevice,
+            request: {
+              requestMemoryMapping: MemoryMapping.LoROM,
+              requestAddress: parseInt("f5f4d2", 16),
+              requestAddressSpace: AddressSpace.FxPakPro,
+              size: 1,
+            },
+          })
+          if (!readResponse.response.response) {
+            return { error: "Error reading memory, no reposonse" }
+          }
+          last_item_id = readResponse.response.response.data[0]
+          if (last_item_id === 0) {
+            break
+          }
+          // This timeout should be at least double the timeout for the sending code
+          // TODO:  turn this into a variable
+          await new Promise(r => setTimeout(r, 550))
+        }
+
         let requests = []
         for (let [loc, [name, size]] of Object.entries(sram_locs)) {
           if (
@@ -338,7 +306,6 @@ export const {
   useGetDevicesQuery,
   useLazyGetDevicesQuery,
   useResetMutation,
-  useSendMemoryMutation,
   useReadMemoryQuery,
   useReadSRAMQuery,
 } = sniApiSlice

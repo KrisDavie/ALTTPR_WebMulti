@@ -66,16 +66,17 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
-    # session_id = Column(String, ForeignKey("mwsessions.id"))
 
     from_player = Column(Integer, index=True)
     to_player = Column(Integer, index=True)
+    to_player_idx = Column(Integer, index=True, nullable=True)
     item_id = Column(Integer, index=True)
     location = Column(Integer, index=True)
     event_type = Column(Enum(EventTypes), index=True)
     event_data = Column(JSON)
 
     session = relationship("MWSession", back_populates="events")
+    __table_args__ = (UniqueConstraint("session_id", "to_player", "to_player_idx", name="player_receive_index"),)
 
 
 
