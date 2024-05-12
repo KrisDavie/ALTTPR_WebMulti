@@ -464,8 +464,7 @@ async def websocket_endpoint(
                                 db,
                                 session.id,
                                 player_id,
-                                skip=last_event,
-                                limit=highest_event - last_event + 1,
+                                gt_idx=last_event,
                             )
                             # Reset new_items because we're just going to get everything again
                             new_items = []
@@ -597,7 +596,7 @@ async def websocket_endpoint(
                 # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
                 last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
                 to_player_events = crud.get_items_for_player_from_others(
-                    db, session.id, player_id, skip=last_event
+                    db, session.id, player_id, gt_idx=last_event
                 )
                 for event in to_player_events:
                     item_name = loc_data.item_table[str(event.item_id)]

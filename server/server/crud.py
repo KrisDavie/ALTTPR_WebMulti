@@ -81,7 +81,7 @@ def get_events_for_player(
     )
 
 def get_items_for_player_from_others(
-    db: Session, session_id: str, player_id: int, skip: int = 0, limit: int = 0
+    db: Session, session_id: str, player_id: int, gt_idx: int = 0, skip: int = 0, limit: int = 0
 ) -> list[models.Event]:
     if limit <= 0:
         return (
@@ -90,6 +90,8 @@ def get_items_for_player_from_others(
             .filter(models.Event.to_player == player_id)
             .filter(models.Event.event_type == models.EventTypes.new_item)
             .filter(models.Event.from_player != player_id)
+            .filter(models.Event.to_player_idx > gt_idx)
+            .order_by(models.Event.to_player_idx.asc())
             .offset(skip)
             .all()
         )
@@ -99,6 +101,8 @@ def get_items_for_player_from_others(
         .filter(models.Event.to_player == player_id)
         .filter(models.Event.event_type == models.EventTypes.new_item)
         .filter(models.Event.from_player != player_id)
+        .filter(models.Event.to_player_idx > gt_idx)
+        .order_by(models.Event.to_player_idx.asc())
         .offset(skip)
         .limit(limit)
         .all()
