@@ -144,45 +144,13 @@ export const sniApiSlice = createApi({
             },
           })
         }
+        // Here we're just going to wait a little bit after sending the last item before then updating the state
+        await new Promise(r => setTimeout(r, 1000))
         queryApi.dispatch(setReceiving(false))
         return { data: writeResponse?.response.response?.requestAddress }
       },
       onQueryStarted: (arg, { dispatch }) => {
         dispatch(setReceiving(true))
-      }
-      
-    }),
-    readMemory: builder.query({
-      async queryFn(
-        arg: { memLoc: string; size: number },
-        queryApi,
-        extraOptions,
-        baseQuery,
-      ) {
-        const state = queryApi.getState() as RootState
-        const transport = getTransport(state)
-        let controlMem = new DeviceMemoryClient(transport)
-        let connectedDevice = state.sni.connectedDevice
-        if (!connectedDevice) {
-          return { error: "No device selected" }
-        }
-
-        let readResponse = await controlMem.singleRead({
-          uri: connectedDevice,
-          request: {
-            requestMemoryMapping: MemoryMapping.LoROM,
-            requestAddress: parseInt(arg.memLoc, 16),
-            requestAddressSpace: AddressSpace.FxPakPro,
-            size: arg.size,
-          },
-        })
-        if (!readResponse.response.response) {
-          return { error: "Error reading memory, no reposonse" }
-        }
-        return {
-          requestAddress: readResponse.response.response.requestAddress,
-          data: Array.from(readResponse.response.response.data), // Convert Uint8Array to Array to be able to serialize
-        }
       },
     }),
     readSRAM: builder.query({
@@ -259,7 +227,12 @@ export const sniApiSlice = createApi({
         if (
           state.multiworld.rom_name &&
           sram["rom_name"] &&
-          ['DR', 'OR'].includes(sram["rom_name"].slice(0, 2).map(byte => String.fromCharCode(byte)).join("")) &&
+          ["DR", "OR"].includes(
+            sram["rom_name"]
+              .slice(0, 2)
+              .map(byte => String.fromCharCode(byte))
+              .join(""),
+          ) &&
           sram["rom_name"]
             .map(byte => String.fromCharCode(byte))
             .join("")
@@ -274,7 +247,12 @@ export const sniApiSlice = createApi({
         // check if rom_arr is all 0xff
         if (
           sram["rom_name"] &&
-          ['DR', 'OR'].includes(sram["rom_name"].slice(0, 2).map(byte => String.fromCharCode(byte)).join("")) &&
+          ["DR", "OR"].includes(
+            sram["rom_name"]
+              .slice(0, 2)
+              .map(byte => String.fromCharCode(byte))
+              .join(""),
+          ) &&
           state.multiworld.player_id === 0
         ) {
           const player_id = sram["rom_name"]
@@ -296,7 +274,7 @@ export const sniApiSlice = createApi({
         if (state.multiworld.init_complete) {
           queryApi.dispatch(updateMemory(sram))
         }
-        
+
         return {
           data: multiReadResponse.response.responses.map(res => {
             return {
@@ -314,6 +292,5 @@ export const {
   useGetDevicesQuery,
   useLazyGetDevicesQuery,
   useResetMutation,
-  useReadMemoryQuery,
   useReadSRAMQuery,
 } = sniApiSlice
