@@ -184,6 +184,32 @@ def create_event(db: Session, event: schemas.EventCreate):
     return db_event
 
 
+def create_forfeit_events(db: Session, session_id: str, events: list[schemas.EventCreate]):
+    # Get the last event for each player from the db
+    session = get_session(db, session_id)
+    players = [x + 1 for x, _ in enumerate(session.mwdata["names"][0])]
+    last_events = db.query(models.Event).filter(models.Event.session_id == session_id).order_by(models.Event.to_player).order_by(models.Event.to_player_idx.asc()).distinct(models.Event.to_player).all()
+    last_event_map = {event.to_player: event.to_player_idx for event in last_events}
+    for player in players:
+        if player not in last_event_map:
+            last_event_map[player] = 0
+        else:
+            if type(last_event_map[player]) != int:
+                last_event_map[player] = 0
+    # Create the forfeit events
+    for event in events:
+        if event.to_player != event.from_player:
+            event.to_player_idx = last_event_map[event.to_player]
+            last_event_map[event.to_player] += 1
+        db.add(models.Event(**event.model_dump()))
+    try:
+        db.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error creating forfeit events: {e}")
+        db.rollback()
+        return False
+
 def create_sramstore(db: Session, sramstore: schemas.SRAMStoreCreate):
     db_sramstore = models.SRAMStore(**sramstore.model_dump())
     db.add(db_sramstore)

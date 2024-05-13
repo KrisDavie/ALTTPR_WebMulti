@@ -6,6 +6,7 @@ import {
   sendChatMessage,
   setInitComplete,
   setPlayerInfo,
+  setSramUpdatingOnServer,
   updateMemory,
 } from "./multiworldSlice"
 import { nanoid } from '@reduxjs/toolkit'
@@ -58,6 +59,10 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         switch (data.type) {
           case "connection_accepted":
           case "player_info_request":
+            break
+
+          case "sram_updated":
+            api.dispatch(setSramUpdatingOnServer(false))
             break
 
           case "player_join":
@@ -138,10 +143,12 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         }
       }
     }
-    if (updateMemory.match(action)) {
+    let currentState = api.getState() as RootState
+    if (updateMemory.match(action) && !currentState.multiworld.receiving && !currentState.multiworld.sram_updating_on_server) {
       socket?.send(
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
+      api.dispatch(setSramUpdatingOnServer(true))
     }
 
     if (sendChatMessage.match(action)) {

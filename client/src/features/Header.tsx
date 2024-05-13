@@ -17,7 +17,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { useGetPlayersQuery } from "./api/apiSlice"
+import { useLazyGetPlayersQuery } from "./api/apiSlice"
+import { useEffect } from "react"
 
 function Header() {
   const grpcConnected = useAppSelector(state => state.sni.grpcConnected)
@@ -35,7 +36,13 @@ function Header() {
     state => state.sni.connectedDevice,
   )
   useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
-  const { isLoading: playersLoading, data: players } = useGetPlayersQuery(sessionId)
+  const [getPlayersQuery, players] = useLazyGetPlayersQuery()
+  useEffect(() => {
+    if (sessionId) {
+      getPlayersQuery(sessionId)
+    }
+  }, [sessionId])
+
 
   function getMultiworldStatus() {
     if (!sessionId) {
@@ -44,13 +51,11 @@ function Header() {
     if (!initComplete) {
       return "Connecting..."
     }
-    if (!player_id) {
+    if (!player_id || !players.data) {
       return "Connected to " + sessionId
     }
-    if (playersLoading) {
-      return "Loading Players..."
-    }
-    return "Connected to " + sessionId + " as " + players[player_id - 1]
+
+    return "Connected to " + sessionId + " as " + players.data[player_id - 1]
   }
 
   return (

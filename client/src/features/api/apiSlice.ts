@@ -72,6 +72,7 @@ export const {
   useUploadMultiDataMutation,
   useSendForfeitMutation,
   useGetPlayersQuery,
+  useLazyGetPlayersQuery,
   useGetSessionEventsQuery,
   useSendNewItemsMutation,
 } = apiSlice

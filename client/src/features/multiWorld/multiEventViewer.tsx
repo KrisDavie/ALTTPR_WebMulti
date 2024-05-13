@@ -26,13 +26,16 @@ function MultiEventViewer(props: any) {
   const [hasScrolled, setHasScrolled] = useState(false)
   const [chatMessage, setChatMessage] = useState("")
   const initComplete = useAppSelector(state => state.multiworld.init_complete)
+  const sram_updating_on_server = useAppSelector(
+    state => state.multiworld.sram_updating_on_server,
+  )
   const [showSelfItems, setShowSelfItems] = useState(true)
   const [showSamePlayerItems, setShowSamePlayerItems] = useState(false)
   const [showOtherItems, setShowOtherItems] = useState(true)
   const [showChat, setShowChat] = useState(true)
   const [showSystem, setShowSystem] = useState(true)
 
-  useReadSRAMQuery({}, { pollingInterval: 1000, skip: receiving })
+  useReadSRAMQuery({}, { pollingInterval: 1000, skip: receiving || sram_updating_on_server })
 
   const parseEvent = (event: any) => {
     const { from_player, to_player, timestamp, event_data } = event
@@ -86,17 +89,19 @@ function MultiEventViewer(props: any) {
       case "player_forfeit":
         return `[${dt.toLocaleTimeString()}] ${from_player_name} forfeited`
       case "chat":
+        var key = `${event.event_historical ? "old_" : ""}${event.id}_msg`
         return (
-          <div key={event.id}>
+          <div key={key}>
             [{dt.toLocaleTimeString()}]{" "}
             <span className="font-bold">{from_player_name}</span>:{" "}
             {event_data["message"]}
           </div>
         )
       case "new_item":
-        const { item_name, location_name, location } = event_data
+        const { item_name, location_name } = event_data
+        var key = `${event.event_historical ? "old_" : ""}${event.id}_item`
         return (
-          <div key={`${event.id}_${location}`}>
+          <div key={key}>
             [{dt.toLocaleTimeString()}] New Item: {item_name} from{" "}
             <span className="font-bold">{from_player_name}</span> to{" "}
             <span className="font-bold">{to_player_name}</span> ({location_name}
@@ -239,7 +244,8 @@ function MultiEventViewer(props: any) {
         ) : (
           <div key="multi_events" ref={eventContainerRef}>
             {multiworldEvents.map(event => {
-              return <div key={event.id}>{parseEvent(event)}</div>
+              const key = `${event.event_historical ? "old_" : ""}${event.id}_container`
+              return <div key={key}>{parseEvent(event)}</div>
             })}
           </div>
         )}

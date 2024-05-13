@@ -245,6 +245,28 @@ async def player_forfeit(
                 f"Player {player_id} - Sent item not in player's items: {sent_event.location}"
             )
 
+    
+    logger.debug(f"Player {player_id} - Forfeited {response['found_item_count']} items, making events")
+    ff_events = [
+        schemas.EventCreate(
+                session_id=session.id,
+                event_type=models.EventTypes.new_item,
+                from_player=player_id,
+                to_player=item_info[1],
+                item_id=item_info[0],
+                location=location,
+                event_data={
+                    "reason": "forfeit",
+                    "item_name": loc_data.item_table[str(item_info[0])],
+                    "location_name": loc_data.lookup_id_to_name[str(location)],
+                },
+            )
+        for location, item_info in all_player_items.items()
+    ]
+    response["forfeit_item_count"] = len(ff_events)
+    success = crud.create_forfeit_events(db, session.id, ff_events)
+    if not success:
+        return {"error": "Failed to create forfeit events"}
     new_event = crud.create_event(
         db,
         schemas.EventCreate(
@@ -258,24 +280,6 @@ async def player_forfeit(
         ),
     )
     response["event_id"] = (new_event.id,)
-    for location, item_info in all_player_items.items():
-        response["forfeit_item_count"] += 1
-        crud.create_event(
-            db,
-            schemas.EventCreate(
-                session_id=session.id,
-                event_type=models.EventTypes.new_item,
-                from_player=player_id,
-                to_player=item_info[1],
-                item_id=item_info[0],
-                location=location,
-                event_data={
-                    "reason": "forfeit",
-                    "item_name": loc_data.item_table[str(item_info[0])],
-                    "location_name": loc_data.lookup_id_to_name[str(location)],
-                },
-            ),
-        )
 
     return response
 
@@ -370,6 +374,7 @@ async def websocket_endpoint(
 
     events_to_send = []
     should_close = False
+    skip_update = 0
 
     await websocket.send_json({"type": "init_success"})
 
@@ -378,7 +383,13 @@ async def websocket_endpoint(
     def after_event(mapper, connection, target_event):
         nonlocal should_close
         nonlocal events_to_send
+        nonlocal skip_update
+
         if target_event.session_id != session.id:
+            return
+        
+        if target_event.event_type == models.EventTypes.player_forfeit:
+            skip_update = 3
             return
 
         if websocket.client_state != WebSocketState.CONNECTED:
@@ -543,6 +554,13 @@ async def websocket_endpoint(
 
             if payload["type"] == "update_memory":
                 # Update the memory for the session
+                logger.debug(f"Got SRAM update from {player_name}")
+                if skip_update > 0:
+                    logger.debug(f"Skipping update for {player_name}")
+                    skip_update -= 1
+                    await websocket.send_json({"type": "sram_updated"})
+                    continue 
+
                 sramstore = schemas.SRAMStoreCreate(
                     session_id=session.id,
                     player=player_id,
@@ -630,6 +648,7 @@ async def websocket_endpoint(
                     )
                     last_event = event.id
 
+                await websocket.send_json({"type": "sram_updated"})
                 continue
     except WebSocketDisconnect:
         crud.create_event(

@@ -93,8 +93,12 @@ export const sniApiSlice = createApi({
 
     sendManyItems: builder.mutation({
       async queryFn(arg: { memVals: any }, queryApi, extraOptions, baseQuery) {
-        queryApi.dispatch(setReceiving(true))
-        const state = queryApi.getState() as RootState
+        let state = queryApi.getState() as RootState
+        // We wait until receiving is set before actually sending items
+        while (!state.multiworld.receiving) {
+          await new Promise(r => setTimeout(r, 250))
+          state = queryApi.getState() as RootState
+        }
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
         let connectedDevice = state.sni.connectedDevice
@@ -143,6 +147,10 @@ export const sniApiSlice = createApi({
         queryApi.dispatch(setReceiving(false))
         return { data: writeResponse?.response.response?.requestAddress }
       },
+      onQueryStarted: (arg, { dispatch }) => {
+        dispatch(setReceiving(true))
+      }
+      
     }),
     readMemory: builder.query({
       async queryFn(

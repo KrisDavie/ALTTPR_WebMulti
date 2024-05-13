@@ -6,6 +6,7 @@ export interface Event {
   to_player: number
   event_data?: object
   session_id?: string
+  event_historical?: boolean
 }
 
 export interface ItemEvent extends Event {

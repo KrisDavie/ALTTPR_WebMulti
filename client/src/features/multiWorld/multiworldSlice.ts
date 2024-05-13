@@ -11,6 +11,7 @@ type SliceState = {
   player_id?: number
   receiving?: boolean
   init_complete?: boolean
+  sram_updating_on_server: boolean
 }
 
 const initialState: SliceState = {
@@ -22,6 +23,7 @@ const initialState: SliceState = {
   player_id: 0,
   receiving: false,
   init_complete: false,
+  sram_updating_on_server: false,
 }
 
 export const multiworldSlice = createSlice({
@@ -58,12 +60,16 @@ export const multiworldSlice = createSlice({
     setInitComplete: (state, action) => {
       state.init_complete = action.payload
     },
+    setSramUpdatingOnServer: (state, action) => {
+      state.sram_updating_on_server = action.payload
+    },
   },
   extraReducers: builder => {
     builder.addMatcher(
       apiSlice.endpoints.getSessionEvents.matchFulfilled,
       (state, action) => {
         action.payload.forEach(event => {
+          event.event_historical = true
           state.events.push(event)
         })
       },
@@ -82,6 +88,7 @@ export const {
   updateMemory,
   setPlayerInfo,
   setInitComplete,
+  setSramUpdatingOnServer,
   sendPlayerInfo,
   setReceiving,
 } = multiworldSlice.actions
