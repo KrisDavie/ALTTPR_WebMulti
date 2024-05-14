@@ -109,24 +109,30 @@ export const sniApiSlice = createApi({
         for (let i = 0; i < arg.memVals.length; i++) {
           let last_item_id = 255
           let memVal = arg.memVals[i]
+          let last_event_idx
           while (last_item_id > 0) {
-            let readCurItem = await controlMem.singleRead({
+            const readCurItem = await controlMem.singleRead({
               uri: connectedDevice,
               request: {
                 requestMemoryMapping: MemoryMapping.LoROM,
-                requestAddress: parseInt("f5f4d2", 16),
+                requestAddress: parseInt("f5f4d0", 16),
                 requestAddressSpace: AddressSpace.FxPakPro,
-                size: 1,
+                size: 3,
               },
             })
             if (!readCurItem.response.response) {
               return { error: "Error reading memory, no reposonse" }
             }
-            last_item_id = readCurItem.response.response.data[0]
+            last_item_id = readCurItem.response.response.data[2]
+            last_event_idx = readCurItem.response.response.data[0] * 256 + readCurItem.response.response.data[1]
             if (last_item_id === 0) {
               break
             }
             await new Promise(r => setTimeout(r, 250))
+          }
+          const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
+          if (last_event_idx && last_event_idx >= event_idx) {
+            continue
           }
 
           writeResponse = await controlMem.singleWrite({

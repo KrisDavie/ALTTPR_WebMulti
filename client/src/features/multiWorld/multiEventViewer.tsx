@@ -113,6 +113,23 @@ function MultiEventViewer(props: any) {
     }
   }
 
+  function getMultiworldEventsText() {
+    let mwevents = multiworldEvents.map(event => {
+      const key = `${event.event_historical ? "old_" : ""}${event.id}_container`
+      return <div key={key}>{parseEvent(event)}</div>
+    })
+    // deduplicate based on key
+    mwevents = mwevents.reduce((acc: any[], x: any) => {
+      const key = x.key
+      if (!acc.some((item: any) => item.key === key)) {
+        acc.push(x)
+      }
+      return acc
+    }, [])
+    return mwevents
+    
+  }
+
   const eventContainerRef = useRef<HTMLDivElement>(null)
   const scrollPrimitiveRef = useRef<HTMLDivElement>(null)
 
@@ -243,10 +260,7 @@ function MultiEventViewer(props: any) {
           <div>Loading... ({isLoading})</div>
         ) : (
           <div key="multi_events" ref={eventContainerRef}>
-            {multiworldEvents.map(event => {
-              const key = `${event.event_historical ? "old_" : ""}${event.id}_container`
-              return <div key={key}>{parseEvent(event)}</div>
-            })}
+            {getMultiworldEventsText()}
           </div>
         )}
         {hasScrolled && (

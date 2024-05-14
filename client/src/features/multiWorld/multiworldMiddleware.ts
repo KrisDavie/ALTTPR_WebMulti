@@ -6,6 +6,7 @@ import {
   sendChatMessage,
   setInitComplete,
   setPlayerInfo,
+  setReceiving,
   setSramUpdatingOnServer,
   updateMemory,
 } from "./multiworldSlice"
@@ -18,6 +19,7 @@ const types_to_adjust = ["new_items", "init_success", "chat", "player_join", "pl
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
   let socket: WebSocket | undefined
+  let socket_receiving = false
   return next => action => {
     if (!isAction(action)) {
       return next(action)
@@ -110,6 +112,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "new_items":
+            socket_receiving = true
             const sorted_data = data.data.sort((a: any, b: any) => a.id - b.id)
             sorted_data.forEach((item: any) => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
@@ -144,11 +147,17 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       }
     }
     let currentState = api.getState() as RootState
-    if (updateMemory.match(action) && !currentState.multiworld.receiving && !currentState.multiworld.sram_updating_on_server) {
+    if (updateMemory.match(action) && !socket_receiving && !currentState.multiworld.sram_updating_on_server) {
       socket?.send(
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
       api.dispatch(setSramUpdatingOnServer(true))
+    }
+
+    if (setReceiving.match(action)) {
+      if (action.payload === false) {
+        socket_receiving = false
+      }
     }
 
     if (sendChatMessage.match(action)) {
