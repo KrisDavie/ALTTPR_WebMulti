@@ -99,17 +99,21 @@ export const sniApiSlice = createApi({
           await new Promise(r => setTimeout(r, 250))
           state = queryApi.getState() as RootState
         }
+
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
         let connectedDevice = state.sni.connectedDevice
         if (!connectedDevice) {
           return { error: "No device or memory data" }
         }
+
         let writeResponse
         for (let i = 0; i < arg.memVals.length; i++) {
           let last_item_id = 255
           let memVal = arg.memVals[i]
           let last_event_idx
+
+          // Wait for the player to finish receiving before sending the next item
           while (last_item_id > 0) {
             const readCurItem = await controlMem.singleRead({
               uri: connectedDevice,
@@ -124,12 +128,16 @@ export const sniApiSlice = createApi({
               return { error: "Error reading memory, no reposonse" }
             }
             last_item_id = readCurItem.response.response.data[2]
-            last_event_idx = readCurItem.response.response.data[0] * 256 + readCurItem.response.response.data[1]
             if (last_item_id === 0) {
+              last_event_idx =
+                readCurItem.response.response.data[0] * 256 +
+                readCurItem.response.response.data[1]
               break
             }
             await new Promise(r => setTimeout(r, 250))
           }
+
+          // Get index of current item and make sure it's greater than the last one so we don't resend any items
           const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
           if (last_event_idx && last_event_idx >= event_idx) {
             continue
@@ -150,6 +158,54 @@ export const sniApiSlice = createApi({
             },
           })
         }
+
+        // Sanity check to make sure the last item index was set, if not, set it
+        var last_item_id = 255
+        var last_event_idx
+        var final_item_idx =
+          arg.memVals[arg.memVals.length - 1].event_idx[0] * 256 +
+          arg.memVals[arg.memVals.length - 1].event_idx[1]
+
+        while (true) {
+          const readCurItem = await controlMem.singleRead({
+            uri: connectedDevice,
+            request: {
+              requestMemoryMapping: MemoryMapping.LoROM,
+              requestAddress: parseInt("f5f4d0", 16),
+              requestAddressSpace: AddressSpace.FxPakPro,
+              size: 3,
+            },
+          })
+
+          if (!readCurItem.response.response) {
+            return { error: "Error reading memory, no reposonse" }
+          }
+          
+          last_item_id = readCurItem.response.response.data[2]
+          if (last_item_id === 0) {
+            last_event_idx =
+              readCurItem.response.response.data[0] * 256 +
+              readCurItem.response.response.data[1]
+            if (last_event_idx === final_item_idx) {
+              break
+            } else {
+              writeResponse = await controlMem.singleWrite({
+                uri: connectedDevice,
+                request: {
+                  requestMemoryMapping: MemoryMapping.LoROM,
+                  requestAddress: parseInt("f5f4d0", 16),
+                  requestAddressSpace: AddressSpace.FxPakPro,
+                  data: new Uint8Array([
+                    arg.memVals[arg.memVals.length - 1].event_idx[0],
+                    arg.memVals[arg.memVals.length - 1].event_idx[1],
+                  ]),
+                },
+              })
+            }
+          }
+          await new Promise(r => setTimeout(r, 250))
+        }
+
         // Here we're just going to wait a little bit after sending the last item before then updating the state
         await new Promise(r => setTimeout(r, 1000))
         queryApi.dispatch(setReceiving(false))
