@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useGetSessionEventsQuery, useGetPlayersQuery } from "../api/apiSlice"
+import MultiEventText from "./MultiEventText"
 import { useReadSRAMQuery } from "../sni/sniApiSlice"
 import { FormEvent, FormEventHandler, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -20,104 +21,50 @@ function MultiEventViewer(props: any) {
   const { isLoading: playersLoading, data: players } =
     useGetPlayersQuery(sessionId)
   const multiworldEvents = useAppSelector(state => state.multiworld.events)
-  const receiving = useAppSelector(state => state.multiworld.receiving)
   const currentPlayer = useAppSelector(state => state.multiworld.player_id)
   const dispatch = useAppDispatch()
   const [hasScrolled, setHasScrolled] = useState(false)
   const [chatMessage, setChatMessage] = useState("")
   const initComplete = useAppSelector(state => state.multiworld.init_complete)
-  const sram_updating_on_server = useAppSelector(
-    state => state.multiworld.sram_updating_on_server,
-  )
   const [showSelfItems, setShowSelfItems] = useState(true)
   const [showSamePlayerItems, setShowSamePlayerItems] = useState(false)
   const [showOtherItems, setShowOtherItems] = useState(true)
   const [showChat, setShowChat] = useState(true)
   const [showSystem, setShowSystem] = useState(true)
 
-  useReadSRAMQuery({}, { pollingInterval: 1000, skip: receiving || sram_updating_on_server })
-
-  const parseEvent = (event: any) => {
-    const { from_player, to_player, timestamp, event_data } = event
-    const event_type = event["event_type"]
-    const dt = new Date(timestamp)
-    const from_player_name =
-      from_player >= 1 ? players[from_player - 1] : "Server"
-    const to_player_name =
-      to_player >= 1 ? players[to_player - 1] : "Unknown Player"
-
-    if (
-      [
-        "init_success",
-        "player_join",
-        "player_leave",
-        "player_forfeit",
-      ].includes(event_type) &&
-      !showSystem
-    ) {
-      return
-    } else if (
-      currentPlayer &&
-      event_type === "new_item" &&
-      to_player === currentPlayer &&
-      !showSelfItems
-    ) {
-      return
-    } else if (
-      currentPlayer &&
-      event_type === "new_item" &&
-      to_player !== currentPlayer &&
-      !showOtherItems
-    ) {
-      return
-    } else if (event_type === "chat" && !showChat) {
-      return
-    } else if (
-      event_type === "new_item" &&
-      (from_player == -1 || (from_player == to_player && !showSamePlayerItems))
-    ) {
-      return
-    }
-
-    switch (event_type) {
-      case "init_success":
-        return `[${dt.toLocaleTimeString()}] Successfully connected to the multiworld server as ${from_player_name}`
-      case "player_join":
-        return `[${dt.toLocaleTimeString()}] ${from_player_name} joined the game`
-      case "player_leave":
-        return `[${dt.toLocaleTimeString()}] ${from_player_name} left the game`
-      case "player_forfeit":
-        return `[${dt.toLocaleTimeString()}] ${from_player_name} forfeited`
-      case "chat":
-        var key = `${event.event_historical ? "old_" : ""}${event.id}_msg`
-        return (
-          <div key={key}>
-            [{dt.toLocaleTimeString()}]{" "}
-            <span className="font-bold">{from_player_name}</span>:{" "}
-            {event_data["message"]}
-          </div>
-        )
-      case "new_item":
-        const { item_name, location_name } = event_data
-        var key = `${event.event_historical ? "old_" : ""}${event.id}_item`
-        return (
-          <div key={key}>
-            [{dt.toLocaleTimeString()}] New Item: {item_name} from{" "}
-            <span className="font-bold">{from_player_name}</span> to{" "}
-            <span className="font-bold">{to_player_name}</span> ({location_name}
-            )
-          </div>
-        )
-      default:
-        return null
-    }
-  }
-
   function getMultiworldEventsText() {
     let mwevents = multiworldEvents.map(event => {
-      const key = `${event.event_historical ? "old_" : ""}${event.id}_container`
-      return <div key={key}>{parseEvent(event)}</div>
+      const { from_player, to_player } = event
+      const event_type = event["event_type"] as string
+
+      if (
+        [
+          "init_success",
+          "player_join",
+          "player_leave",
+          "player_forfeit",
+        ].includes(event_type) &&
+        !showSystem
+      ) {
+        return
+      } else if (
+        (event_type === "new_item" &&
+          currentPlayer &&
+          ((to_player === currentPlayer && !showSelfItems) ||
+            (to_player !== currentPlayer && !showOtherItems))) ||
+        (event_type === "chat" && !showChat)
+      ) {
+        return
+      } else if (
+        event_type === "new_item" &&
+        (from_player == -1 ||
+          (from_player == to_player && !showSamePlayerItems))
+      ) {
+        return
+      }
+      return <MultiEventText key={event.id} event={event} players={players} />
     })
+
     // deduplicate based on key
     mwevents = mwevents.reduce((acc: any[], x: any) => {
       const key = x.key
@@ -127,7 +74,6 @@ function MultiEventViewer(props: any) {
       return acc
     }, [])
     return mwevents
-    
   }
 
   const eventContainerRef = useRef<HTMLDivElement>(null)

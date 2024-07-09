@@ -10,7 +10,7 @@ import { AlertCircleIcon, CheckIcon, HomeIcon, XCircleIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useAppSelector } from "@/app/hooks"
 import { selectAvailableDevices } from "./sni/sniSlice"
-import { useGetDevicesQuery } from "./sni/sniApiSlice"
+import { useGetDevicesQuery, useReadSRAMQuery } from "./sni/sniApiSlice"
 import {
   Tooltip,
   TooltipContent,
@@ -35,13 +35,24 @@ function Header() {
   const connectedDevice: string | undefined = useAppSelector(
     state => state.sni.connectedDevice,
   )
-  useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
+  const receiving = useAppSelector(state => state.multiworld.receiving)
+
+  const sram_updating_on_server = useAppSelector(
+    state => state.multiworld.sram_updating_on_server,
+  )
   const [getPlayersQuery, players] = useLazyGetPlayersQuery()
   useEffect(() => {
     if (sessionId) {
       getPlayersQuery(sessionId)
     }
   }, [sessionId])
+
+  useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
+
+  useReadSRAMQuery(
+    {},
+    { pollingInterval: 1000, skip: !sessionId || receiving || sram_updating_on_server },
+  )
 
 
   function getMultiworldStatus() {
