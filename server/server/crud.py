@@ -277,7 +277,7 @@ def create_forfeit_events(db: Session, session_id: str, events: list[schemas.Eve
             # last_event_map[event.to_player] += 1
 
             # This will hit the db for each event, but it should be fine since we're only doing this for forfeit events
-            last_event = db.query(models.Event).filter(models.Event.session_id == session_id).filter(models.Event.to_player == event.to_player).order_by(models.Event.to_player_idx.desc()).first()
+            last_event = db.query(models.Event).filter(models.Event.session_id == session_id).filter(models.Event.to_player == event.to_player).filter(models.Event.to_player_idx != None).order_by(models.Event.to_player_idx.desc()).first()
             if last_event:
                 event.to_player_idx = last_event.to_player_idx + 1
             else:

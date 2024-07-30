@@ -49,7 +49,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         return next(action)
       }
       socket = new WebSocket(
-        `ws://localhost:8000/api/v1/ws/${originalState.multiworld.sessionId}`,
+        `${import.meta.env.VITE_BACKEND_WS_URL}/api/v1/ws/${originalState.multiworld.sessionId}`,
       )
       if (originalState.multiworld.password) {
         socket.onopen = () => {

@@ -1,4 +1,3 @@
-# Stolen from SCopeV2
 version: "3.8"
 services:
   web:
@@ -17,6 +16,7 @@ services:
       - ./client/tailwind.config.js:/usr/src/app/tailwind.config.js
       - ./client/components.json:/usr/src/app/components.json
       - ./client/postcss.config.js:/usr/src/app/postcss.config.js
+      - ./client/.env:/usr/src/app/.env
       - ./data:/data
 
     command: ["npm", "run", "dev"]
