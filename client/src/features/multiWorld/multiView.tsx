@@ -1,7 +1,7 @@
 import { Params, useLoaderData } from "react-router-dom"
 import MultiEventViewer from "./multiEventViewer"
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
-import { connect, setSession } from "./multiworldSlice"
+import { connect, setSession, pauseReceiving, resumeReceiving } from "./multiworldSlice"
 import { useSendForfeitMutation } from "../api/apiSlice"
 import ItemSend from "./itemSend"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ function MultiView(props: any) {
   const playerId = useAppSelector(state => state.multiworld.player_id)
   const { sessionId } = useLoaderData() as { sessionId: string }
   const [sendForfeit, sendForfeitResult] = useSendForfeitMutation()
+  const receiving_paused = useAppSelector(state => state.multiworld.receiving_paused)
 
   useEffect(() => {
     dispatch(setSession({ sessionId }))
@@ -26,15 +27,25 @@ function MultiView(props: any) {
   return (
     <div className="flex flex-col ml-2">
       <MultiEventViewer sessionId={sessionId} />
-      <Button
-      className="w-32 mt-2"
-        disabled={playerId === undefined || sendForfeitResult.isSuccess}
-        onClick={() => sendForfeit({sessionId, playerId})}
-      >
-        {sendForfeitResult.isSuccess ?  "Already Forfeit" : "Forfeit"}
-      </Button>
+      <div className="flex flex-row space-x-2">
+        <Button
+        className="w-32 mt-2"
+          disabled={playerId === undefined || sendForfeitResult.isSuccess}
+          onClick={() => sendForfeit({sessionId, playerId})}
+        >
+          {sendForfeitResult.isSuccess ?  "Already Forfeit" : "Forfeit"}
+        </Button>
+
+        <Button
+          className="w-32 mt-2"
+          onClick={() => receiving_paused ? dispatch(resumeReceiving()) : dispatch(pauseReceiving())}
+        >
+          {receiving_paused ? "Resume Receiving" : "Pause Receiving"}
+        </Button>
+        </div>
 
       {adminMode && <ItemSend sessionId={sessionId} />}
+
     </div>
   )
 }

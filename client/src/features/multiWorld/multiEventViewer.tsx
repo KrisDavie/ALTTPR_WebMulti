@@ -2,7 +2,6 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useGetSessionEventsQuery, useGetPlayersQuery } from "../api/apiSlice"
 import MultiEventText from "./MultiEventText"
-import { useReadSRAMQuery } from "../sni/sniApiSlice"
 import { FormEvent, FormEventHandler, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,7 +26,7 @@ function MultiEventViewer(props: any) {
   const [chatMessage, setChatMessage] = useState("")
   const initComplete = useAppSelector(state => state.multiworld.init_complete)
   const [showSelfItems, setShowSelfItems] = useState(true)
-  const [showSamePlayerItems, setShowSamePlayerItems] = useState(false)
+  const [showSamePlayerItems, setShowSamePlayerItems] = useState(true)
   const [showOtherItems, setShowOtherItems] = useState(true)
   const [showChat, setShowChat] = useState(true)
   const [showSystem, setShowSystem] = useState(true)
@@ -114,7 +113,7 @@ function MultiEventViewer(props: any) {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col max-w-6xl">
       <ScrollArea
         className="h-72 w-4/5 rounded-md border"
         onWheel={handleOnWheel}

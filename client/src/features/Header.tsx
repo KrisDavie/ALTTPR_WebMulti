@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useLazyGetPlayersQuery } from "./api/apiSlice"
 import { useEffect } from "react"
+import UserButton from "./user/UserButton"
 
 function Header() {
   const grpcConnected = useAppSelector(state => state.sni.grpcConnected)
@@ -54,7 +55,6 @@ function Header() {
     { pollingInterval: 1000, skip: !sessionId || receiving || sram_updating_on_server },
   )
 
-
   function getMultiworldStatus() {
     if (!sessionId) {
       return "No Session"
@@ -74,7 +74,7 @@ function Header() {
       <div className="flex absolute top-2 left-2">
         <b>{"Multiworld Session:"}</b><span>- {getMultiworldStatus()}</span>
       </div>
-      <div className="flex absolute top-2 right-2">
+      <div className="flex absolute top-2 right-2 space-x-2">
         <Link to="/" reloadDocument>
           <Button variant="outline" size="icon">
             <HomeIcon />
@@ -115,6 +115,7 @@ function Header() {
           </PopoverContent>
         </Popover>
         <ModeToggle />
+        <UserButton />
       </div>
     </div>
   )

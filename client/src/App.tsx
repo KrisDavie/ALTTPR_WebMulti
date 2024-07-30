@@ -4,7 +4,7 @@ import LandingPage from "./features/multiWorld/landingPage"
 
 const App = () => {
   return (
-      <div className="h-screen flex justify-center items-center">
+      <div className="flex flex-1 justify-center items-center">
         <LandingPage />
       </div>
   )

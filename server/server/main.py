@@ -1,6 +1,14 @@
 import asyncio
 import json
+import os
+import secrets
 import zlib
+from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.base_client.errors import OAuthError
+
+import datetime 
+
+from cryptography.fernet import Fernet
 
 import logging
 
@@ -11,13 +19,17 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Header,
+    Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
     File,
     Form,
 )
+from fastapi.responses import HTMLResponse
 from fastapi.websockets import WebSocketState
 from starlette import status
+from starlette.middleware.sessions import SessionMiddleware
 
 from sqlalchemy.orm import Session
 from sqlalchemy import event as listen_event
@@ -35,10 +47,12 @@ app = FastAPI(
     description="A server for ALTTPR Multiworld",
     version="0.1.0",
     root_path="/api/v1",
-    docs_url=None,
-    redoc_url=None,
-    openapi_url=None,
+    # docs_url=None,
+    # redoc_url=None,
+    # openapi_url=None,
 )
+
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("FASTAPI_SESSION_SECRET"))
 
 logging_config = {
     "version": 1,
@@ -64,12 +78,23 @@ logging_config = {
 logger = logging.getLogger("ALTTPR WebMulti")
 logging.config.dictConfig(logging_config)
 
+oauth = OAuth()
+oauth.register(
+    name='discord',
+    server_metadata_url='https://discord.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'identify email'},
+    client_id=os.environ.get('DISCORD_OAUTH_CLIENT_ID'),
+    client_secret=os.environ.get('DISCORD_OAUTH_CLIENT_SECRET'),
+    api_base_url='https://discord.com/api/v10',
+)    
 
-# models.Base.metadata.drop_all(bind=engine)
+models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
 
-ONE_MB = 1024 * 1024
+fernet = Fernet(os.environ.get("FERNET_SECRET"))
 
+ONE_MB = 1024 * 1024
+SESSION_EXPIRE_DAYS = max(2, int(os.environ.get("SESSION_EXPIRE_DAYS", 28))) # Minimum 2 days
 
 def get_db():
     db = SessionLocal()
@@ -83,14 +108,127 @@ def get_db():
 async def valid_content_length(content_length: int = Header(..., lt=ONE_MB * 10)):
     return content_length
 
+def create_guest_user(response: Response, db: Annotated[Session, Depends(get_db)]):
+    token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
+    user = crud.create_user(db, schemas.UserCreate(session_tokens=[token]))
+    response.set_cookie("session_token", token, expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie("user_id", str(user.id), expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie("user_type", "guest", expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    return user, token
+
+def verify_session_token(response: Response, request: Request, db: Annotated[Session, Depends(get_db)]):
+    token = request.cookies.get("session_token")
+    user_id = request.cookies.get("user_id")
+    if not user_id:
+        return create_guest_user(response, db)
+    if not token:
+        return False, False
+    user = crud.get_user(db, int(user_id))
+    if not user:
+        return False, False
+    if len(user.session_tokens) == 0:
+        return False, False
+    if fernet.decrypt(token.encode()) not in [fernet.decrypt(x.encode()) for x in user.session_tokens]:
+    # if fernet.decrypt(user.session_token.encode()) != fernet.decrypt(token.encode()):
+        response.delete_cookie("session_token")
+        raise HTTPException(status_code=401, detail="Invalid session token")
+    if fernet.extract_timestamp(token.encode()) < (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=SESSION_EXPIRE_DAYS + 1)).timestamp():
+        return update_session_token(response, db, user.id, token)
+    return user, token
+
+
+def update_session_token(response: Response, db: Annotated[Session, Depends(get_db)], user_id: int, old_token: str):
+    token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
+    user = crud.update_user_session_token(db, user_id, token, old_token)
+    response.set_cookie("session_token", token, expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    return user, token
+    
+
+@app.post('/users/auth', response_model=schemas.User)
+def auth_user(response: Response, db: Annotated[Session, Depends(get_db)], user_info: Annotated[dict, Depends(verify_session_token)]):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
+@app.get("/users/discord_login")
+async def discord_login(request: Request):
+    redirect_uri = request.url_for("discord_auth")
+    return await oauth.discord.authorize_redirect(request, redirect_uri)
+
+@app.get('/users/discord_auth', response_class=HTMLResponse)
+async def discord_auth(request: Request, response: Response, db: Annotated[Session, Depends(get_db)]):
+    try:
+        discord_token = await oauth.discord.authorize_access_token(request)
+    except OAuthError as e:
+        return e.error
+    resp = await oauth.discord.get('users/@me', token=discord_token)
+
+    discord_user: schemas.DiscordAPIUser = resp.json()
+    discord_user['refresh_token'] = discord_token['refresh_token']
+    
+    token = request.cookies.get("session_token")
+    user_id = request.cookies.get("user_id")
+    user = None
+    if user_id:
+        if token:
+            logger.debug(f"User ID: {user_id}, should verify")
+            user, token = verify_session_token(response, request, db)
+        else:
+            response.delete_cookie("session_token")
+            raise HTTPException(status_code=401, detail="Invalid session token")
+    # No user set in the browser
+    if not user:
+        # TODO: This workflow could be better
+        user = crud.get_user_by_email(db, discord_user['email'])
+    # User hasn't logged in before
+    if not user:
+        user, token = create_guest_user(response, db)
+    # User was a guest previously
+    if user.email != discord_user['email']:
+        user = crud.update_discord_user(db, user.id, discord_user)
+    
+    if not token:
+        token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
+        user = crud.update_user_session_token(db, user.id, token, None)
+    response.set_cookie("user_type", "discord", expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie("user_id", str(user.id), expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie("session_token", token, expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    return f"""
+    <html>
+        <head
+            data-user-id="{user.id}"
+        >
+            <title>Discord Login</title>
+        </head>
+        <body>
+           Successfully logged in as: {user.username}
+        </body>
+    </html>
+    """
+
+
+
+@app.get('/users/{user_id}', response_model=schemas.User)
+def get_user(response: Response, user_id: int, db: Annotated[Session, Depends(get_db)], user_info: Annotated[dict, Depends(verify_session_token)]):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if user.is_superuser:
+        return crud.get_user(db, user_id)
+    if user_id != user.id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    return user
 
 @app.post("/multidata")
 def create_multi_session(
     file: Annotated[bytes, File()],
     game: Annotated[str, Form()],
+    db: Annotated[Session, Depends(get_db)],
+    file_size: Annotated[int, Depends(valid_content_length)],
     password: Annotated[str, Form()] = None,
-    db: Session = Depends(get_db),
-    file_size: int = Depends(valid_content_length),
+    user_info: Annotated[dict, Depends(verify_session_token)] = None,
 ):
     # Accept form multi-data
 
@@ -101,6 +239,7 @@ def create_multi_session(
 
     multidata = file
     db_game = crud.get_game(db, game)
+    user, _ = user_info
 
     if not db_game:
         db_game = crud.create_game(db, schemas.GameCreate(title=game))
@@ -118,7 +257,9 @@ def create_multi_session(
             mwdata=parsed_data,
             session_password=password if password else None,
         ),
+        user.id
     )
+
     create_event = crud.create_event(
         db,
         schemas.EventCreate(
@@ -128,6 +269,7 @@ def create_multi_session(
             to_player=-1,
             item_id=-1,
             location=-1,
+            user_id=user.id,
             event_data={"session_id": str(session.id)},
         ),
     )
@@ -141,7 +283,7 @@ def create_multi_session(
 
 @app.get("/session/{mw_session_id}/events")
 def get_session_events(
-    mw_session_id: str, db: Session = Depends(get_db)
+    mw_session_id: str, db: Annotated[Session, Depends(get_db)]
 ) -> list[schemas.Event]:
     all_events = crud.get_all_events(db, session_id=mw_session_id)
     for event in all_events:
@@ -157,18 +299,17 @@ def get_session_events(
 
 
 @app.get("/session/{mw_session_id}/players")
-def get_session_players(mw_session_id: str, db: Session = Depends(get_db)) -> list[str]:
+def get_session_players(mw_session_id: str, db: Annotated[Session, Depends(get_db)]) -> list[str]:
     session = crud.get_session(db, mw_session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session.mwdata["names"][0]
 
-
 @app.post("/admin/{mw_session_id}/send")
 def admin_send_event(
     mw_session_id: str,
     send_data: dict,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     session = crud.get_session(db, mw_session_id)
     if not session:
@@ -218,7 +359,7 @@ def admin_send_event(
 async def player_forfeit(
     mw_session_id: str,
     send_data: dict,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     session = crud.get_session(db, mw_session_id)
     if not session:
@@ -286,7 +427,7 @@ async def player_forfeit(
 
 @app.websocket("/ws/{mw_session_id}")
 async def websocket_endpoint(
-    websocket: WebSocket, mw_session_id: str, db: Session = Depends(get_db)
+    websocket: WebSocket, mw_session_id: str, db: Annotated[Session, Depends(get_db)]
 ):
     await websocket.accept()
     session = crud.get_session(db, mw_session_id)
@@ -375,6 +516,7 @@ async def websocket_endpoint(
     events_to_send = []
     should_close = False
     skip_update = 0
+    receiving_paused = False
 
     await websocket.send_json({"type": "init_success"})
 
@@ -384,24 +526,29 @@ async def websocket_endpoint(
         nonlocal should_close
         nonlocal events_to_send
         nonlocal skip_update
+        nonlocal receiving_paused
 
         if target_event.session_id != session.id:
             return
-        
-        if target_event.event_type == models.EventTypes.player_forfeit:
+        elif target_event.event_type == models.EventTypes.player_forfeit:
+            # I don't remember why I did this, but it's probably important	
             skip_update = 3
             return
-
-        if websocket.client_state != WebSocketState.CONNECTED:
+        elif websocket.client_state != WebSocketState.CONNECTED:
             # TODO: Actually handle this
             should_close = True
             return
-
-        if (
-            target_event.event_type == models.EventTypes.new_item
-            and target_event.to_player == player_id
-        ):
+        elif target_event.event_type == models.EventTypes.player_pause_receive:
+            receiving_paused = True
             return
+        elif target_event.event_type == models.EventTypes.player_resume_receive:
+            receiving_paused = False
+            return
+        # elif (
+        #     target_event.event_type == models.EventTypes.new_item
+        #     and target_event.to_player == player_id
+        # ):
+        #     return
 
         new_event = {
             "type": target_event.event_type.name,
@@ -440,7 +587,7 @@ async def websocket_endpoint(
 
     try:
         while True:
-            if len(events_to_send) > 0:
+            if (len(events_to_send) > 0) and not receiving_paused:
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
                 if len(new_items) > 0:
@@ -536,8 +683,35 @@ async def websocket_endpoint(
             if payload["type"] == "ping":
                 await websocket.send_json({"type": "pong"})
                 continue
-
-            if payload["type"] == "chat":
+            elif payload["type"] == "pause_receiving":
+                crud.create_event(
+                    db,
+                    schemas.EventCreate(
+                        session_id=session.id,
+                        event_type=models.EventTypes.player_pause_receive,
+                        from_player=player_id,
+                        to_player=-1,
+                        item_id=-1,
+                        location=-1,
+                        event_data={"player_id": player_id},
+                    ),
+                )
+                continue
+            elif payload["type"] == "resume_receiving":
+                crud.create_event(
+                    db,
+                    schemas.EventCreate(
+                        session_id=session.id,
+                        event_type=models.EventTypes.player_resume_receive,
+                        from_player=player_id,
+                        to_player=-1,
+                        item_id=-1,
+                        location=-1,
+                        event_data={"player_id": player_id},
+                    ),
+                )
+                continue
+            elif payload["type"] == "chat":
                 crud.create_event(
                     db,
                     schemas.EventCreate(
@@ -551,104 +725,110 @@ async def websocket_endpoint(
                     ),
                 )
                 continue
-
-            if payload["type"] == "update_memory":
+            elif payload["type"] == "update_memory":
                 # Update the memory for the session
-                logger.debug(f"Got SRAM update from {player_name}")
-                if skip_update > 0:
-                    logger.debug(f"Skipping update for {player_name}")
-                    skip_update -= 1
-                    await websocket.send_json({"type": "sram_updated"})
-                    continue 
+                    logger.debug(f"Got SRAM update from {player_name}")
+                    if skip_update > 0:
+                        logger.debug(f"Skipping update for {player_name}")
+                        skip_update -= 1
+                        await websocket.send_json({"type": "sram_updated"})
+                        continue 
 
-                sramstore = schemas.SRAMStoreCreate(
-                    session_id=session.id,
-                    player=player_id,
-                    sram=json.dumps(payload["data"]),
-                )
-                # NOTE: This sram store could be moved to on disconnect only if we want to save on writes
-                old_sram, new_sram = crud.update_sramstore(db, sramstore)
+                    sramstore = schemas.SRAMStoreCreate(
+                        session_id=session.id,
+                        player=player_id,
+                        sram=json.dumps(payload["data"]),
+                    )
+                    # NOTE: This sram store could be moved to on disconnect only if we want to save on writes
+                    old_sram, new_sram = crud.update_sramstore(db, sramstore)
 
-                if old_sram == None:
-                    continue
-
-                sram_diff = sram.sram_diff(new_sram, old_sram)
-
-                if len(sram_diff) == 0:
-                    continue
-
-                locations = sram.get_changed_locations(sram_diff, new_sram)
-
-                for location in locations:
-                    loc_id = int(loc_data.lookup_name_to_id[location])
-
-                    if (loc_id, player_id) not in multidata_locs:
-                        logger.error(
-                            f"{player_name} - Location not in multidata_locs: {location} [{loc_id}]"
-                        )
+                    if old_sram == None:
+                        await websocket.send_json({"type": "sram_updated"})
                         continue
-                    item_id, item_player = multidata_locs[(loc_id, player_id)]
 
-                    if loc_id not in checked_locations:
+                    sram_diff = sram.sram_diff(new_sram, old_sram)
+
+                    if len(sram_diff) == 0:
+                        await websocket.send_json({"type": "sram_updated"})
+                        continue
+
+                    locations = sram.get_changed_locations(sram_diff, new_sram)
+
+                    for location in locations:
+                        loc_id = int(loc_data.lookup_name_to_id[location])
+
+                        if (loc_id, player_id) not in multidata_locs:
+                            logger.error(
+                                f"{player_name} - Location not in multidata_locs: {location} [{loc_id}]"
+                            )
+                            continue
+                        item_id, item_player = multidata_locs[(loc_id, player_id)]
+
+                        if loc_id not in checked_locations:
+                            logger.info(
+                                f"{player_name} - New Location Checked: {location} [{loc_id}]"
+                            )
+
+                            crud.create_event(
+                                db,
+                                schemas.EventCreate(
+                                    session_id=session.id,
+                                    event_type=models.EventTypes.new_item,
+                                    from_player=player_id,
+                                    to_player=item_player,
+                                    item_id=item_id,
+                                    location=loc_id,
+                                    event_data={
+                                        "item_name": loc_data.item_table[str(item_id)],
+                                        "location_name": location,
+                                    },
+                                ),
+                            )
+                            checked_locations.add(loc_id)
+
+                    # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
+                    last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
+                    to_player_events = crud.get_items_for_player_from_others(
+                        db, session.id, player_id, gt_idx=last_event
+                    )
+                    for event in to_player_events:
+                        item_name = loc_data.item_table[str(event.item_id)]
                         logger.info(
-                            f"{player_name} - New Location Checked: {location} [{loc_id}]"
+                            f"{player_name} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
                         )
-
-                        crud.create_event(
-                            db,
-                            schemas.EventCreate(
-                                session_id=session.id,
-                                event_type=models.EventTypes.new_item,
-                                from_player=player_id,
-                                to_player=item_player,
-                                item_id=item_id,
-                                location=loc_id,
-                                event_data={
-                                    "item_name": loc_data.item_table[str(item_id)],
-                                    "location_name": location,
+                        events_to_send.append(
+                            {
+                                "type": "new_item",
+                                "data": {
+                                    "id": event.id,
+                                    "timestamp": int(
+                                        time.mktime(event.timestamp.timetuple())
+                                    ),
+                                    "event_type": event.event_type.name,
+                                    "from_player": event.from_player,
+                                    "to_player": event.to_player,
+                                    "event_idx": list(
+                                        event.to_player_idx.to_bytes(2, "big")
+                                    ),
+                                    "item_id": loc_data.item_table_reversed[item_name],
+                                    "location": event.location,
+                                    "event_data": {
+                                        "item_name": item_name,
+                                        "location_name": loc_data.lookup_id_to_name[
+                                            str(event.location)
+                                        ],
+                                    },
                                 },
-                            ),
+                            }
                         )
-                        checked_locations.add(loc_id)
+                        last_event = event.id
 
-                # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
-                last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
-                to_player_events = crud.get_items_for_player_from_others(
-                    db, session.id, player_id, gt_idx=last_event
-                )
-                for event in to_player_events:
-                    item_name = loc_data.item_table[str(event.item_id)]
-                    logger.info(
-                        f"{player_name} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
-                    )
-                    events_to_send.append(
-                        {
-                            "type": "new_item",
-                            "data": {
-                                "id": event.id,
-                                "timestamp": int(
-                                    time.mktime(event.timestamp.timetuple())
-                                ),
-                                "event_type": event.event_type.name,
-                                "from_player": event.from_player,
-                                "to_player": event.to_player,
-                                "event_idx": list(
-                                    event.to_player_idx.to_bytes(2, "big")
-                                ),
-                                "item_id": loc_data.item_table_reversed[item_name],
-                                "location": event.location,
-                                "event_data": {
-                                    "item_name": item_name,
-                                    "location_name": loc_data.lookup_id_to_name[
-                                        str(event.location)
-                                    ],
-                                },
-                            },
-                        }
-                    )
-                    last_event = event.id
-
-                await websocket.send_json({"type": "sram_updated"})
+                    logger.debug(f"{player_name} - Finished processing sram update")
+                    await websocket.send_json({"type": "sram_updated"})
+                    logger.debug(f"{player_name} - Sent sram_updated")
+                    continue
+            else:
+                logger.error(f"Unknown message: {payload}")
                 continue
     except WebSocketDisconnect:
         crud.create_event(

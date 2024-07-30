@@ -38,6 +38,9 @@ services:
     volumes:
       - ./data:/data
       - ./server/server:/app/server
+    env_file:
+      - path: ./server/.env
+        required: true
     depends_on:
       - db
   db:

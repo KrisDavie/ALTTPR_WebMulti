@@ -5,7 +5,7 @@ import { EventTypes } from "@/app/types"
 const baseUrl = "/api/v1"
 
 export const apiSlice = createApi({
-  baseQuery: fetchBaseQuery({ baseUrl }),
+  baseQuery: fetchBaseQuery({ baseUrl, credentials: "include" }),
   reducerPath: "api",
   endpoints: builder => ({
     uploadMultiData: builder.mutation({
@@ -18,6 +18,14 @@ export const apiSlice = createApi({
           url: "/multidata",
           method: "POST",
           body: body,
+        }
+      },
+    }),
+    authUser: builder.mutation({
+      query: () => {
+        return {
+          url: "/users/auth",
+          method: "POST",
         }
       },
     }),
@@ -73,6 +81,7 @@ export const {
   useSendForfeitMutation,
   useGetPlayersQuery,
   useLazyGetPlayersQuery,
+  useAuthUserMutation,
   useGetSessionEventsQuery,
   useSendNewItemsMutation,
 } = apiSlice

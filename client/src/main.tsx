@@ -3,10 +3,7 @@ import { createRoot } from "react-dom/client"
 import { Provider } from "react-redux"
 import App from "./App"
 import { store } from "./app/store"
-import {
-  createBrowserRouter,
-  RouterProvider,
-} from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { loader as multiViewLoader } from "./features/multiWorld/multiView"
 
 import "./index.css"
@@ -18,23 +15,23 @@ const router = createBrowserRouter([
     path: "/",
     element: <MainLayout />,
     children: [
-    {
-      path: "/",
-      element: <App />,
-    },
+      {
+        path: "/",
+        element: <App />,
+      },
 
-    {
-      path: "/multi/:sessionId",
-      element: <MultiView />,
-      loader: multiViewLoader
-    },
-    {
-      path: "/multiAdmin/:sessionId",
-      element: <MultiView adminMode />,
-      loader: multiViewLoader
-    }
-    ]}
-
+      {
+        path: "/multi/:sessionId",
+        element: <MultiView />,
+        loader: multiViewLoader,
+      },
+      {
+        path: "/multiAdmin/:sessionId",
+        element: <MultiView adminMode />,
+        loader: multiViewLoader,
+      },
+    ],
+  },
 ])
 
 const container = document.getElementById("root")

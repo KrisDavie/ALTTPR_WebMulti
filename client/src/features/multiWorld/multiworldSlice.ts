@@ -10,6 +10,7 @@ type SliceState = {
   rom_name?: string
   player_id?: number
   receiving?: boolean
+  receiving_paused?: boolean
   init_complete?: boolean
   sram_updating_on_server: boolean
 }
@@ -22,6 +23,7 @@ const initialState: SliceState = {
   rom_name: "",
   player_id: 0,
   receiving: false,
+  receiving_paused: false,
   init_complete: false,
   sram_updating_on_server: false,
 }
@@ -49,6 +51,12 @@ export const multiworldSlice = createSlice({
     },
     updateMemory: (state, action) => {
       state.memory = action.payload
+    },
+    pauseReceiving: state => {
+      state.receiving_paused = true
+    },
+    resumeReceiving: state => {
+      state.receiving_paused = false
     },
     setPlayerInfo: (state, action) => {
       state.player_id = action.payload.player_id
@@ -85,6 +93,8 @@ export const {
   setSession,
   addEvent,
   sendChatMessage,
+  pauseReceiving,
+  resumeReceiving,
   updateMemory,
   setPlayerInfo,
   setInitComplete,

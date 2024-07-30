@@ -7,6 +7,56 @@ import uuid
 from server.models import EventTypes
 
 
+class DiscordAPIUser(BaseModel):
+    id: str
+    username: str
+    avatar: str | None = None
+    discriminator: str
+    public_flags: int
+    flags: int
+    banner: str | None = None
+    accent_color: int | None = None
+    global_name: str 
+    avatar_decoration_data: str | None = None
+    banner_color: str | None = None
+    clan: str | None = None
+    mfa_enabled: bool
+    locale: str
+    premium_type: int
+    email: str
+    verified: bool
+    refresh_token: str | None = None
+
+class UserBase(BaseModel):
+    session_tokens: list[str]
+    pass
+
+
+class UserCreate(UserBase):
+    pass
+
+
+class DiscordUserCreate(UserBase):
+    discord_id: str
+    username: str
+    email: str
+    discord_username: str
+    avatar: str | None = None
+    refresh_token: str | None = None
+
+
+class User(UserBase):
+    id: int
+    username: str | None = None
+    supporter: bool = False
+    colour: str | None = None
+    avatar: str | None = None
+    discord_username: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class GameBase(BaseModel):
     title: str
     description: str | None = None
@@ -27,6 +77,7 @@ class EventBase(BaseModel):
     session_id: uuid.UUID
     event_type: EventTypes
     event_data: dict | None = None
+    user_id: int | None = None
     from_player: int
     to_player: int
     to_player_idx: int | None = None
@@ -54,6 +105,7 @@ class MWSessionBase(BaseModel):
 class MWSessionCreate(MWSessionBase):
     game_id: int
     session_password: str | None = None
+    tournament: bool = False
 
 
 class MWSession(MWSessionBase):

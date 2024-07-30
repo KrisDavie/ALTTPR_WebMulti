@@ -13,6 +13,7 @@ import {
   updateMemory,
   setReceiving,
   reconnect,
+  resumeReceiving,
 } from "../multiWorld/multiworldSlice"
 
 const getTransport = (state: any) => {
@@ -27,6 +28,7 @@ const hexStringToU8Arr = (hexString: string) => {
 }
 
 const ingame_modes = [0x07, 0x09, 0x0b]
+const save_quit_modes = [0x00, 0x01, 0x17, 0x1B]
 
 type SRAMLocs = {
   [key: number]: [string, number]
@@ -160,55 +162,57 @@ export const sniApiSlice = createApi({
         }
 
         // Sanity check to make sure the last item index was set, if not, set it
-        var last_item_id = 255
-        var last_event_idx
-        var final_item_idx =
-          arg.memVals[arg.memVals.length - 1].event_idx[0] * 256 +
-          arg.memVals[arg.memVals.length - 1].event_idx[1]
+        if (arg.memVals.length > 0) {
+          var last_item_id = 255
+          var last_event_idx
+          var final_item_idx =
+            arg.memVals[arg.memVals.length - 1].event_idx[0] * 256 +
+            arg.memVals[arg.memVals.length - 1].event_idx[1]
 
-        while (true) {
-          const readCurItem = await controlMem.singleRead({
-            uri: connectedDevice,
-            request: {
-              requestMemoryMapping: MemoryMapping.LoROM,
-              requestAddress: parseInt("f5f4d0", 16),
-              requestAddressSpace: AddressSpace.FxPakPro,
-              size: 3,
-            },
-          })
+          while (true) {
+            const readCurItem = await controlMem.singleRead({
+              uri: connectedDevice,
+              request: {
+                requestMemoryMapping: MemoryMapping.LoROM,
+                requestAddress: parseInt("f5f4d0", 16),
+                requestAddressSpace: AddressSpace.FxPakPro,
+                size: 3,
+              },
+            })
 
-          if (!readCurItem.response.response) {
-            return { error: "Error reading memory, no reposonse" }
-          }
-          
-          last_item_id = readCurItem.response.response.data[2]
-          if (last_item_id === 0) {
-            last_event_idx =
-              readCurItem.response.response.data[0] * 256 +
-              readCurItem.response.response.data[1]
-            if (last_event_idx === final_item_idx) {
-              break
-            } else {
-              writeResponse = await controlMem.singleWrite({
-                uri: connectedDevice,
-                request: {
-                  requestMemoryMapping: MemoryMapping.LoROM,
-                  requestAddress: parseInt("f5f4d0", 16),
-                  requestAddressSpace: AddressSpace.FxPakPro,
-                  data: new Uint8Array([
-                    arg.memVals[arg.memVals.length - 1].event_idx[0],
-                    arg.memVals[arg.memVals.length - 1].event_idx[1],
-                  ]),
-                },
-              })
+            if (!readCurItem.response.response) {
+              return { error: "Error reading memory, no reposonse" }
             }
+            
+            last_item_id = readCurItem.response.response.data[2]
+            if (last_item_id === 0) {
+              last_event_idx =
+                readCurItem.response.response.data[0] * 256 +
+                readCurItem.response.response.data[1]
+              if (last_event_idx === final_item_idx) {
+                break
+              } else {
+                writeResponse = await controlMem.singleWrite({
+                  uri: connectedDevice,
+                  request: {
+                    requestMemoryMapping: MemoryMapping.LoROM,
+                    requestAddress: parseInt("f5f4d0", 16),
+                    requestAddressSpace: AddressSpace.FxPakPro,
+                    data: new Uint8Array([
+                      arg.memVals[arg.memVals.length - 1].event_idx[0],
+                      arg.memVals[arg.memVals.length - 1].event_idx[1],
+                    ]),
+                  },
+                })
+              }
+            }
+            await new Promise(r => setTimeout(r, 250))
           }
-          await new Promise(r => setTimeout(r, 250))
         }
+
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state
         await new Promise(r => setTimeout(r, 1000))
-        queryApi.dispatch(setReceiving(false))
         return { data: writeResponse?.response.response?.requestAddress }
       },
       onQueryStarted: (arg, { dispatch }) => {
@@ -328,8 +332,10 @@ export const sniApiSlice = createApi({
             }),
           )
         }
-
         if (!ingame_modes.includes(sram["game_mode"][0])) {
+          if (save_quit_modes.includes(sram["game_mode"][0])) {
+            queryApi.dispatch(resumeReceiving())
+          }
           return { error: "Not in game" }
         }
 

@@ -7,15 +7,23 @@ import {
   setInitComplete,
   setPlayerInfo,
   setReceiving,
+  pauseReceiving,
+  resumeReceiving,
   setSramUpdatingOnServer,
   updateMemory,
 } from "./multiworldSlice"
-import { nanoid } from '@reduxjs/toolkit'
+import { nanoid } from "@reduxjs/toolkit"
 import { sniApiSlice } from "../sni/sniApiSlice"
 
 import type { RootState } from "@/app/store"
 
-const types_to_adjust = ["new_items", "init_success", "chat", "player_join", "player_leave"]
+const types_to_adjust = [
+  "new_items",
+  "init_success",
+  "chat",
+  "player_join",
+  "player_leave",
+]
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
   let socket: WebSocket | undefined
@@ -68,47 +76,55 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "player_join":
-            api.dispatch(addEvent({
-              event_type: "player_join",
-              from_player: data.data.from_player,
-              to_player: -1,
-              timestamp: data.data.timestamp * 1000,
-              event_data: {},
-              id: nanoid(),
-            }))
+            api.dispatch(
+              addEvent({
+                event_type: "player_join",
+                from_player: data.data.from_player,
+                to_player: -1,
+                timestamp: data.data.timestamp * 1000,
+                event_data: {},
+                id: nanoid(),
+              }),
+            )
             break
 
           case "player_leave":
-            api.dispatch(addEvent({
-              event_type: "player_leave",
-              from_player: data.data.from_player,
-              to_player: -1,
-              timestamp: data.data.timestamp * 1000,
-              event_data: {},
-              id: nanoid(),
-            }))
+            api.dispatch(
+              addEvent({
+                event_type: "player_leave",
+                from_player: data.data.from_player,
+                to_player: -1,
+                timestamp: data.data.timestamp * 1000,
+                event_data: {},
+                id: nanoid(),
+              }),
+            )
             break
 
           case "init_success":
-            api.dispatch(addEvent({
-              event_type: "init_success",
-              from_player: currentState.multiworld.player_id,
-              to_player: 0,
-              timestamp: Date.now(),
-              event_data: {},
-              id: nanoid(),
-            }))
+            api.dispatch(
+              addEvent({
+                event_type: "init_success",
+                from_player: currentState.multiworld.player_id,
+                to_player: 0,
+                timestamp: Date.now(),
+                event_data: {},
+                id: nanoid(),
+              }),
+            )
             break
 
           case "chat":
-            api.dispatch(addEvent({
-              event_type: "chat",
-              from_player: data.data.from_player,
-              to_player: -1,
-              timestamp: data.data.timestamp * 1000,
-              event_data: { message: data.data.event_data.message },
-              id: nanoid(),
-            }))
+            api.dispatch(
+              addEvent({
+                event_type: "chat",
+                from_player: data.data.from_player,
+                to_player: -1,
+                timestamp: data.data.timestamp * 1000,
+                event_data: { message: data.data.event_data.message },
+                id: nanoid(),
+              }),
+            )
             break
 
           case "new_items":
@@ -118,16 +134,26 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
-            api.dispatch(
-              // @ts-expect-error
-              sniApiSlice.endpoints.sendManyItems.initiate({
-                memVals: sorted_data.filter(
-                  (item: any) =>
-                    item.from_player != currentState.multiworld.player_id &&
-                    item.to_player == currentState.multiworld.player_id,
-                ),
-              }),
-            )
+            // @ts-expect-error
+            api
+              .dispatch(
+                // @ts-expect-error
+                sniApiSlice.endpoints.sendManyItems.initiate({
+                  memVals: sorted_data.filter(
+                    (item: any) =>
+                      item.from_player != currentState.multiworld.player_id &&
+                      item.to_player == currentState.multiworld.player_id,
+                  ),
+                }),
+              )
+              .unwrap()
+              .then(() => {
+                api.dispatch(setReceiving(false))
+              })
+              .catch(() => {
+                api.dispatch(setReceiving(false))
+              })
+
             break
           default:
             console.log("Unknown event type: " + data.type)
@@ -147,7 +173,11 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       }
     }
     let currentState = api.getState() as RootState
-    if (updateMemory.match(action) && !socket_receiving && !currentState.multiworld.sram_updating_on_server) {
+    if (
+      updateMemory.match(action) &&
+      !socket_receiving &&
+      !currentState.multiworld.sram_updating_on_server
+    ) {
       socket?.send(
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
@@ -168,7 +198,22 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         }),
       )
     }
-      
+
+    if (pauseReceiving.match(action)) {
+      socket?.send(
+        JSON.stringify({
+          type: "pause_receiving",
+        }),
+      )
+    }
+
+    if (resumeReceiving.match(action)) {
+      socket?.send(
+        JSON.stringify({
+          type: "resume_receiving",
+        }),
+      )
+    }
 
     if (setPlayerInfo.match(action)) {
       socket?.send(

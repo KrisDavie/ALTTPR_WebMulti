@@ -4,9 +4,11 @@ import { sniApiSlice } from "@/features/sni/sniApiSlice"
 import { apiSlice } from "@/features/api/apiSlice"
 import { multiworldSlice } from "@/features/multiWorld/multiworldSlice"
 import { multiworldMiddleware } from "@/features/multiWorld/multiworldMiddleware"
+import { userSlice } from "@/features/user/userSlice"
 
 const rootReducer = combineReducers({
   sni: sniSlice.reducer,
+  user: userSlice.reducer,
   multiworld: multiworldSlice.reducer,
   [sniApiSlice.reducerPath]: sniApiSlice.reducer,
   [apiSlice.reducerPath]: apiSlice.reducer,

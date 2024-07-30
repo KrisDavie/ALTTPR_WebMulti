@@ -35,12 +35,13 @@ import {
 import { useState } from "react"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@radix-ui/react-scroll-area"
 
 interface IItems {
   [index: string]: number | number[]
 }
 
-const items: IItems = _items
+var items: IItems = _items
 
 function ItemSend(props: any) {
   const { sessionId } = props
@@ -117,28 +118,30 @@ function ItemSend(props: any) {
                         className="h-9"
                       />
                       <CommandEmpty>No item found.</CommandEmpty>
-                      <CommandGroup>
-                        {Object.keys(items).map(item => (
-                          <CommandItem
-                            value={item}
-                            key={item}
-                            onSelect={() => {
-                              form.setValue("item", item)
-                              setItemPopoverOpen(false)
-                            }}
-                          >
-                            {item}
-                            <CheckIcon
-                              className={cn(
-                                "ml-auto h-4 w-4",
-                                item === field.value
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <ScrollArea className='flex max-h-44' >
+                        <CommandGroup>
+                          {Object.keys(items).map(item => (
+                            <CommandItem
+                              value={item}
+                              key={item}
+                              onSelect={() => {
+                                form.setValue("item", item)
+                                setItemPopoverOpen(false)
+                              }}
+                            >
+                              {item}
+                              <CheckIcon
+                                className={cn(
+                                  "ml-auto h-4 w-4",
+                                  item === field.value
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                     </ScrollArea>
                     </Command>
                   </PopoverContent>
                 </Popover>
