@@ -538,10 +538,10 @@ async def websocket_endpoint(
             # TODO: Actually handle this
             should_close = True
             return
-        elif target_event.event_type == models.EventTypes.player_pause_receive:
+        elif (target_event.event_type == models.EventTypes.player_pause_receive) and (target_event.from_player == player_id):
             receiving_paused = True
             return
-        elif target_event.event_type == models.EventTypes.player_resume_receive:
+        elif target_event.event_type == models.EventTypes.player_resume_receive and (target_event.from_player == player_id):
             receiving_paused = False
             return
         # elif (
