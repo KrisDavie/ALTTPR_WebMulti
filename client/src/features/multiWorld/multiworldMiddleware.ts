@@ -14,6 +14,7 @@ import {
 } from "./multiworldSlice"
 import { nanoid } from "@reduxjs/toolkit"
 import { sniApiSlice } from "../sni/sniApiSlice"
+import { log } from "../loggerSlice"
 
 import type { RootState } from "@/app/store"
 
@@ -48,6 +49,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       if (socket) {
         return next(action)
       }
+      api.dispatch(log(`Connecting to multiworld session websocket ${originalState.multiworld.sessionId}`))
       socket = new WebSocket(
         `${import.meta.env.VITE_BACKEND_WS_URL}/api/v1/ws/${originalState.multiworld.sessionId}`,
       )
@@ -62,6 +64,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         if (!data.id) {
           data.id = nanoid()
         }
+        api.dispatch(log(`Received event: ${data.type}`))
         if (!types_to_adjust.includes(data.type)) {
           api.dispatch(addEvent(data))
         }
@@ -76,6 +79,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "player_join":
+            api.dispatch(log(`Player ${data.data.from_player} joined`))
             api.dispatch(
               addEvent({
                 event_type: "player_join",
@@ -89,6 +93,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "player_leave":
+            api.dispatch(log(`Player ${data.data.from_player} left`))
             api.dispatch(
               addEvent({
                 event_type: "player_leave",
@@ -102,6 +107,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "init_success":
+            api.dispatch(log(`Multiworld init success`))
             api.dispatch(
               addEvent({
                 event_type: "init_success",
@@ -115,6 +121,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "chat":
+            api.dispatch(log(`Chat message (${data.data.from_player}}) : ${data.data.event_data.message}`))
             api.dispatch(
               addEvent({
                 event_type: "chat",
@@ -128,12 +135,19 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "new_items":
+            api.dispatch(log(`Received ${data.data.length} new items`))
             socket_receiving = true
-            const sorted_data = data.data.sort((a: any, b: any) => a.id - b.id)
+            const sorted_data = data.data.sort((a: any, b: any) => (a.event_idx[0] * 256 + a.event_idx[1]) - b.event_idx[0] * 256 + b.event_idx[1])
             sorted_data.forEach((item: any) => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
+            api.dispatch(log(`Items:`))
+            sorted_data.filter(
+              (item: any) =>
+                item.from_player != currentState.multiworld.player_id &&
+                item.to_player == currentState.multiworld.player_id,
+            ).map((item: any) => api.dispatch(log(`IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`)))
             // @ts-expect-error
             api
               .dispatch(
@@ -166,6 +180,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
           alert("Connection closed: " + event.reason)
           return
         } else {
+          api.dispatch(log(`Connection closed (${event.reason}), reconnecting...`))
           setTimeout(() => {
             api.dispatch(connect())
           }, 1000)
@@ -200,6 +215,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
     }
 
     if (pauseReceiving.match(action)) {
+      api.dispatch(log("Pausing receiving"))
       socket?.send(
         JSON.stringify({
           type: "pause_receiving",
@@ -208,6 +224,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
     }
 
     if (resumeReceiving.match(action)) {
+      api.dispatch(log("Resuming receiving"))
       socket?.send(
         JSON.stringify({
           type: "resume_receiving",

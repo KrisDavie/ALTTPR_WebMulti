@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import SniSettings from "./sni/sniSettings"
-import { AlertCircleIcon, CheckIcon, HomeIcon, XCircleIcon } from "lucide-react"
+import { AlertCircleIcon, BugIcon, CheckIcon, HomeIcon, XCircleIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useAppSelector } from "@/app/hooks"
 import { selectAvailableDevices } from "./sni/sniSlice"
@@ -20,6 +20,7 @@ import {
 import { useLazyGetPlayersQuery } from "./api/apiSlice"
 import { useEffect } from "react"
 import UserButton from "./user/UserButton"
+import pako from "pako"
 
 function Header() {
   const grpcConnected = useAppSelector(state => state.sni.grpcConnected)
@@ -41,6 +42,9 @@ function Header() {
   const sram_updating_on_server = useAppSelector(
     state => state.multiworld.sram_updating_on_server,
   )
+
+  const currentLog = useAppSelector(state => state.logger.log)
+
   const [getPlayersQuery, players] = useLazyGetPlayersQuery()
   useEffect(() => {
     if (sessionId) {
@@ -54,6 +58,23 @@ function Header() {
     {},
     { pollingInterval: 1000, skip: !sessionId || receiving || sram_updating_on_server },
   )
+
+
+  function saveLog() {
+    // Add new lines to log entries, compress the log with gzip, and save it to a file in the browser
+    const log = currentLog.map(entry => entry + "\n").join("")
+    // Compress
+    const encoder = new TextEncoder()
+    const compressed = pako.gzip(encoder.encode(log))
+    // Save to file
+    const blob = new Blob([compressed], { type: "application/gzip" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "multiworld.log.gz"
+    a.click()
+    URL.revokeObjectURL(url)    
+  }
 
   function getMultiworldStatus() {
     if (!sessionId) {
@@ -115,6 +136,10 @@ function Header() {
           </PopoverContent>
         </Popover>
         <ModeToggle />
+        <Button variant="outline" onClick={saveLog}>
+          <BugIcon className="pr-2"/>
+          Save Log
+        </Button>
         <UserButton />
       </div>
     </div>

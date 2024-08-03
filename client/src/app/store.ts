@@ -5,11 +5,13 @@ import { apiSlice } from "@/features/api/apiSlice"
 import { multiworldSlice } from "@/features/multiWorld/multiworldSlice"
 import { multiworldMiddleware } from "@/features/multiWorld/multiworldMiddleware"
 import { userSlice } from "@/features/user/userSlice"
+import { loggerSlice } from "@/features/loggerSlice"
 
 const rootReducer = combineReducers({
   sni: sniSlice.reducer,
   user: userSlice.reducer,
   multiworld: multiworldSlice.reducer,
+  logger: loggerSlice.reducer,
   [sniApiSlice.reducerPath]: sniApiSlice.reducer,
   [apiSlice.reducerPath]: apiSlice.reducer,
 })

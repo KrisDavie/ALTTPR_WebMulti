@@ -15,6 +15,7 @@ import {
   reconnect,
   resumeReceiving,
 } from "../multiWorld/multiworldSlice"
+import { log } from "../loggerSlice"
 
 const getTransport = (state: any) => {
   return new GrpcWebFetchTransport({
@@ -97,10 +98,12 @@ export const sniApiSlice = createApi({
       async queryFn(arg: { memVals: any }, queryApi, extraOptions, baseQuery) {
         let state = queryApi.getState() as RootState
         // We wait until receiving is set before actually sending items
+        queryApi.dispatch(log(`Sending ${arg.memVals.length} items. Waiting for state to be done receiving...`))
         while (!state.multiworld.receiving) {
           await new Promise(r => setTimeout(r, 250))
           state = queryApi.getState() as RootState
         }
+        queryApi.dispatch(log(`Done Receiving. Sending ${arg.memVals.length} items`))
 
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
@@ -134,6 +137,7 @@ export const sniApiSlice = createApi({
               last_event_idx =
                 readCurItem.response.response.data[0] * 256 +
                 readCurItem.response.response.data[1]
+              queryApi.dispatch(log(`Last item finished, index was ${last_event_idx}`))
               break
             }
             await new Promise(r => setTimeout(r, 250))
@@ -142,6 +146,7 @@ export const sniApiSlice = createApi({
           // Get index of current item and make sure it's greater than the last one so we don't resend any items
           const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
           if (last_event_idx && last_event_idx >= event_idx) {
+            queryApi.dispatch(log(`Skipping item ${event_idx} as it is less than or equal to the last item ${last_event_idx}`))
             continue
           }
 
@@ -159,6 +164,7 @@ export const sniApiSlice = createApi({
               ]),
             },
           })
+          queryApi.dispatch(log(`Done sending item ${memVal.event_data.item_name}`))
         }
 
         // Sanity check to make sure the last item index was set, if not, set it
@@ -168,7 +174,7 @@ export const sniApiSlice = createApi({
           var final_item_idx =
             arg.memVals[arg.memVals.length - 1].event_idx[0] * 256 +
             arg.memVals[arg.memVals.length - 1].event_idx[1]
-
+          queryApi.dispatch(log(`Final item index is ${final_item_idx}`))
           while (true) {
             const readCurItem = await controlMem.singleRead({
               uri: connectedDevice,
@@ -189,9 +195,12 @@ export const sniApiSlice = createApi({
               last_event_idx =
                 readCurItem.response.response.data[0] * 256 +
                 readCurItem.response.response.data[1]
+              queryApi.dispatch(log(`Final item finished, index was ${last_event_idx}`))
               if (last_event_idx === final_item_idx) {
+                queryApi.dispatch(log(`Final item index matches, done sending items`))
                 break
               } else {
+                queryApi.dispatch(log(`Final item index does not match, setting index to ${final_item_idx}`))
                 writeResponse = await controlMem.singleWrite({
                   uri: connectedDevice,
                   request: {
@@ -213,6 +222,7 @@ export const sniApiSlice = createApi({
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state
         await new Promise(r => setTimeout(r, 1000))
+        queryApi.dispatch(log(`Completed sending items`))
         return { data: writeResponse?.response.response?.requestAddress }
       },
       onQueryStarted: (arg, { dispatch }) => {

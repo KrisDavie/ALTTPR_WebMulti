@@ -15,6 +15,7 @@ import * as z from "zod"
 
 import { useAppDispatch } from "@/app/hooks"
 import { useNavigate } from "react-router-dom"
+import { log } from "../loggerSlice"
 
 function MultiClientForm(props: any) {
   const { setSelectedMode } = props
@@ -36,6 +37,7 @@ function MultiClientForm(props: any) {
   })
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
+    dispatch(log(`Connecting to multiworld session ${data.sessionId}`))
     navigate(`/multi/${data.sessionId}`)
   }
 
