@@ -1,3 +1,4 @@
+from asyncio import sleep
 import asyncio
 import json
 import os
@@ -353,6 +354,85 @@ def admin_send_event(
                 ),
             )
     return new_event
+
+
+@app.post("/session/{mw_session_id}/debug/{num_items}")
+async def debug_session(
+    mw_session_id: str,
+    num_items: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    session = crud.get_session(db, mw_session_id)
+    if not session:
+        return {"error": "Session not found"}
+    multidata = session.mwdata
+    items_to_send = num_items
+    for player_id, name in enumerate(multidata["names"][0]):
+        player_id += 1
+        print(f"DEBUGGING: Player {player_id} - {name}")
+        all_player_items = [
+            x for x in session.mwdata["locations"] if x[0][1] == player_id
+        ]
+        all_player_items = {x[0][0]: x[1] for x in all_player_items}
+        player_events = crud.get_events_for_player(db, session.id, player_id)
+        player_events = [
+            x for x in player_events if x.event_type == models.EventTypes.new_item
+        ]
+        player_items = set([f"{x.item_id}__{x.location}" for x in player_events])
+        for location, item_info in all_player_items.items():
+            if item_info[1] != player_id:
+                continue
+            if f"{item_info[0]}__{location}" in player_items:
+                continue
+            crud.create_event(
+                db,
+                schemas.EventCreate(
+                    session_id=session.id,
+                    event_type=models.EventTypes.new_item,
+                    from_player=0,
+                    to_player=item_info[1],
+                    item_id=item_info[0],
+                    location=location,
+                    event_data={
+                        "reason": "forfeit",
+                        "item_name": loc_data.item_table[str(item_info[0])],
+                        "location_name": loc_data.lookup_id_to_name[str(location)],
+                    },
+                ),
+            )
+            print(
+                f"DEBUGGING: Player {player_id} - Sending item {loc_data.item_table[str(item_info[0])]} to player {item_info[1]}"
+            )
+            items_to_send -= 1
+            # await sleep(.2)
+            if items_to_send == 0:
+                items_to_send = num_items
+                break
+    return {"items_sent": num_items}
+
+
+@app.post("/session/{mw_session_id}/log")
+async def log_event(
+    mw_session_id: str,
+    send_data: dict,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    session = crud.get_session(db, mw_session_id)
+    if not session:
+        return {"error": "Session not found"}
+    
+    new_entry = schemas.LogEntryCreate(
+        session_id=session.id,
+        user_id=send_data["user_id"],
+        player_id=send_data["player_id"],
+        content=send_data["message"],
+    )
+    
+    log_entry = crud.add_log_entry(db, new_entry)
+
+    if not log_entry:
+        return {"error": "Failed to log message"}
+    return {"log_id": log_entry.id}
 
 
 @app.post("/session/{mw_session_id}/player_forfeit")

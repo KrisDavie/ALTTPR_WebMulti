@@ -42,6 +42,15 @@ export const apiSlice = createApi({
     getPlayers: builder.query({
       query: sessionId => `/session/${sessionId}/players`,
     }),
+    sendLogMessage: builder.mutation({
+      query: ({ sessionId, user_id, player_id, message }) => ({
+        url: `/session/${sessionId}/log`,
+        method: "POST",
+        body: { user_id: user_id,
+                player_id: player_id,
+                message: message },
+      }),
+    }),
     sendForfeit: builder.mutation({
       query: ({ sessionId, playerId }) => ({
         url: `/session/${sessionId}/player_forfeit`,
@@ -79,6 +88,7 @@ export const apiSlice = createApi({
 export const {
   useUploadMultiDataMutation,
   useSendForfeitMutation,
+  useSendLogMessageMutation,
   useGetPlayersQuery,
   useLazyGetPlayersQuery,
   useAuthUserMutation,

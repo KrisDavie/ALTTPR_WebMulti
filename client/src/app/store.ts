@@ -4,6 +4,7 @@ import { sniApiSlice } from "@/features/sni/sniApiSlice"
 import { apiSlice } from "@/features/api/apiSlice"
 import { multiworldSlice } from "@/features/multiWorld/multiworldSlice"
 import { multiworldMiddleware } from "@/features/multiWorld/multiworldMiddleware"
+import { loggerMiddleware } from "@/features/loggerMiddleware"
 import { userSlice } from "@/features/user/userSlice"
 import { loggerSlice } from "@/features/loggerSlice"
 
@@ -21,6 +22,7 @@ export const store = configureStore({
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware()
       .concat(multiworldMiddleware)
+      .concat(loggerMiddleware)
       .concat(apiSlice.middleware)
       .concat(sniApiSlice.middleware),
 

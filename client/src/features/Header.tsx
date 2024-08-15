@@ -6,9 +6,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import SniSettings from "./sni/sniSettings"
-import { AlertCircleIcon, BugIcon, CheckIcon, HomeIcon, XCircleIcon } from "lucide-react"
+import {
+  AlertCircleIcon,
+  BugIcon,
+  CheckIcon,
+  HomeIcon,
+  XCircleIcon,
+} from "lucide-react"
 import { Link } from "react-router-dom"
-import { useAppSelector } from "@/app/hooks"
+import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { selectAvailableDevices } from "./sni/sniSlice"
 import { useGetDevicesQuery, useReadSRAMQuery } from "./sni/sniApiSlice"
 import {
@@ -18,11 +24,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useLazyGetPlayersQuery } from "./api/apiSlice"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import UserButton from "./user/UserButton"
 import pako from "pako"
+import { log } from "./loggerSlice"
 
 function Header() {
+  const dispatch = useAppDispatch()
   const grpcConnected = useAppSelector(state => state.sni.grpcConnected)
   const devices: string[] = useAppSelector(selectAvailableDevices)
   const sessionId: string | undefined = useAppSelector(
@@ -52,13 +60,28 @@ function Header() {
     }
   }, [sessionId])
 
-  useGetDevicesQuery({noConnect: false}, { pollingInterval: 1000, skip: devices.length > 0 })
+  useGetDevicesQuery(
+    { noConnect: false },
+    { pollingInterval: 1000, skip: devices.length > 0 },
+  )
 
   useReadSRAMQuery(
     {},
-    { pollingInterval: 1000, skip: !sessionId || receiving || sram_updating_on_server },
+    {
+      pollingInterval: 1000,
+      skip: !sessionId || receiving || sram_updating_on_server,
+    },
   )
+  const [reportGlow, setReportGlow] = useState(false)
 
+  useEffect(() => {
+    if (reportGlow) {
+      const interval = setInterval(() => {
+        setReportGlow(false)
+      }, 500)
+      return () => clearInterval(interval)
+    }
+  }, [reportGlow])
 
   function saveLog() {
     // Add new lines to log entries, compress the log with gzip, and save it to a file in the browser
@@ -73,7 +96,16 @@ function Header() {
     a.href = url
     a.download = "multiworld.log.gz"
     a.click()
-    URL.revokeObjectURL(url)    
+    URL.revokeObjectURL(url)
+  }
+
+  function reportBug() {
+    const reportText = prompt("Please describe the bug you encountered:")
+    if (!reportText) {
+      return
+    }
+    dispatch(log("BUG REPORT: " + reportText))
+    setReportGlow(true)
   }
 
   function getMultiworldStatus() {
@@ -93,7 +125,8 @@ function Header() {
   return (
     <div className="flex flex-col h-12">
       <div className="flex absolute top-2 left-2">
-        <b>{"Multiworld Session:"}</b><span>- {getMultiworldStatus()}</span>
+        <b>{"Multiworld Session:"}</b>
+        <span>- {getMultiworldStatus()}</span>
       </div>
       <div className="flex absolute top-2 right-2 space-x-2">
         <Link to="/" reloadDocument>
@@ -102,14 +135,12 @@ function Header() {
           </Button>
         </Link>
         <Popover>
-          <PopoverTrigger> 
+          <PopoverTrigger>
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger >
+                <TooltipTrigger>
                   <Button variant="outline">
-                    <div className="pr-2">
-                    SNI Settings
-                    </div>
+                    <div className="pr-2">SNI Settings</div>
                     {!grpcConnected ? (
                       <XCircleIcon color="red" />
                     ) : devices.length === 0 ? (
@@ -120,13 +151,11 @@ function Header() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                {!grpcConnected ? (
-                      "SNI Not Detected"
-                    ) : devices.length === 0 ? (
-                      "No Devices Found"
-                    ) : (
-                      "Connected to " + connectedDevice + " via SNI"
-                    )}
+                  {!grpcConnected
+                    ? "SNI Not Detected"
+                    : devices.length === 0
+                      ? "No Devices Found"
+                      : "Connected to " + connectedDevice + " via SNI"}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -136,9 +165,9 @@ function Header() {
           </PopoverContent>
         </Popover>
         <ModeToggle />
-        <Button variant="outline" onClick={saveLog}>
-          <BugIcon className="pr-2"/>
-          Save Log
+        <Button className={`transition ease-out duration-300 ${reportGlow ? "bg-green-500": "" }`} variant="outline" onClick={reportBug}>
+          <BugIcon className="pr-2" />
+          Report Bug
         </Button>
         <UserButton />
       </div>

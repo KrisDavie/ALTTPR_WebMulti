@@ -49,7 +49,11 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       if (socket) {
         return next(action)
       }
-      api.dispatch(log(`Connecting to multiworld session websocket ${originalState.multiworld.sessionId}`))
+      api.dispatch(
+        log(
+          `Connecting to multiworld session websocket ${originalState.multiworld.sessionId}`,
+        ),
+      )
       socket = new WebSocket(
         `${import.meta.env.VITE_BACKEND_WS_URL}/api/v1/ws/${originalState.multiworld.sessionId}`,
       )
@@ -121,7 +125,11 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "chat":
-            api.dispatch(log(`Chat message (${data.data.from_player}}) : ${data.data.event_data.message}`))
+            api.dispatch(
+              log(
+                `Chat message (${data.data.from_player}}) : ${data.data.event_data.message}`,
+              ),
+            )
             api.dispatch(
               addEvent({
                 event_type: "chat",
@@ -137,17 +145,34 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
           case "new_items":
             api.dispatch(log(`Received ${data.data.length} new items`))
             socket_receiving = true
-            const sorted_data = data.data.sort((a: any, b: any) => (a.event_idx[0] * 256 + a.event_idx[1]) - b.event_idx[0] * 256 + b.event_idx[1])
+            const sorted_data = data.data
+              .filter(
+                (item: any) => item.event_idx && item.event_idx.length == 2,
+              )
+              .sort(
+                (a: any, b: any) =>
+                  (a.event_idx[0] * 256 +
+                  a.event_idx[1]) -
+                  (b.event_idx[0] * 256 + b.event_idx[1]),
+              )
             sorted_data.forEach((item: any) => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
             api.dispatch(log(`Items:`))
-            sorted_data.filter(
-              (item: any) =>
-                item.from_player != currentState.multiworld.player_id &&
-                item.to_player == currentState.multiworld.player_id,
-            ).map((item: any) => api.dispatch(log(`IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`)))
+            sorted_data
+              .filter(
+                (item: any) =>
+                  item.from_player != currentState.multiworld.player_id &&
+                  item.to_player == currentState.multiworld.player_id,
+              )
+              .map((item: any) =>
+                api.dispatch(
+                  log(
+                    `IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`,
+                  ),
+                ),
+              )
             // @ts-expect-error
             api
               .dispatch(
@@ -180,7 +205,9 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
           alert("Connection closed: " + event.reason)
           return
         } else {
-          api.dispatch(log(`Connection closed (${event.reason}), reconnecting...`))
+          api.dispatch(
+            log(`Connection closed (${event.reason}), reconnecting...`),
+          )
           setTimeout(() => {
             api.dispatch(connect())
           }, 1000)
@@ -224,6 +251,9 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
     }
 
     if (resumeReceiving.match(action)) {
+      if (currentState.multiworld.receiving_paused === false) {
+        return next(action)
+      }
       api.dispatch(log("Resuming receiving"))
       socket?.send(
         JSON.stringify({

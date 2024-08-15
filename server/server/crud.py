@@ -11,6 +11,14 @@ ignore_mask = {}
 logger = logging.getLogger(__name__)
 
 
+def add_log_entry(db: Session, log_entry: schemas.LogEntryCreate):
+    db_log_entry = models.Log(**log_entry.model_dump())
+    db.add(db_log_entry)
+    db.commit()
+    db.refresh(db_log_entry)
+    return db_log_entry
+
+
 def create_user(db: Session, user: schemas.UserCreate):
     db_user = models.User(**user.model_dump())
     db.add(db_user)
