@@ -46,8 +46,7 @@ export const apiSlice = createApi({
       query: ({ sessionId, user_id, player_id, message }) => ({
         url: `/session/${sessionId}/log`,
         method: "POST",
-        body: { user_id: user_id,
-                player_id: player_id,
+        body: { player_id: player_id,
                 message: message },
       }),
     }),

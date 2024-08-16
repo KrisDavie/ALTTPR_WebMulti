@@ -6,6 +6,7 @@ type SliceState = {
   sessionId: string
   password: string
   events: Event[]
+  // TODO: This should actually be an object
   memory?: string[]
   rom_name?: string
   player_id?: number

@@ -9,7 +9,6 @@ from server.models import EventTypes
 
 class LogBase(BaseModel):
     session_id: uuid.UUID
-    user_id: int | None = None
     player_id: int | None = None
     content: str
 

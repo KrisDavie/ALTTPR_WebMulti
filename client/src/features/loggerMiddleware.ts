@@ -20,7 +20,7 @@ export const loggerMiddleware: Middleware<{}, RootState> = api => {
         // @ts-expect-error
         apiSlice.endpoints.sendLogMessage.initiate({
           sessionId: originalState.multiworld.sessionId,
-          user_id: originalState.user.id,
+          // user_id: originalState.user.id,
           player_id: originalState.multiworld.player_id,
           message: `[${new Date().toLocaleString()}] ${action.payload}`,
         }),

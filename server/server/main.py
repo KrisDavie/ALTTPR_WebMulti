@@ -423,7 +423,6 @@ async def log_event(
     
     new_entry = schemas.LogEntryCreate(
         session_id=session.id,
-        user_id=send_data["user_id"],
         player_id=send_data["player_id"],
         content=send_data["message"],
     )
@@ -597,6 +596,7 @@ async def websocket_endpoint(
     should_close = False
     skip_update = 0
     receiving_paused = False
+    witheld_items = []
 
     await websocket.send_json({"type": "init_success"})
 
@@ -667,7 +667,7 @@ async def websocket_endpoint(
 
     try:
         while True:
-            if (len(events_to_send) > 0) and not receiving_paused:
+            if (len(events_to_send) > 0):
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
                 if len(new_items) > 0:
@@ -752,9 +752,41 @@ async def websocket_endpoint(
                     )
 
                 logger.debug(f"{player_name} - Sending {len(events_to_send)} events")
+
+                # Get all item events
+                item_event_lists = [event for event in events_to_send if event["type"] == "new_items"]
+
+                # Flatten the list of lists
+                all_items = [item_event for item_event_list in item_event_lists for item_event in item_event_list['data']]
+
+                # filter all_items to remove duplicates where event.id is identical
+                all_items = list({event['id']:event for event in all_items}.values())
+
+                logger.debug(f"{player_name} - {len(all_items)} - {all_items}")
+                logger.debug(f"{player_name} - {len(events_to_send)} - {events_to_send}")
+
+                non_item_events = [event for event in events_to_send if event["type"] != "new_items"]
+
+                if receiving_paused:
+                    logger.debug(f"{player_name} - Sending is paused")
+                    witheld_items = [event for event in all_items if event['to_player'] == player_id]   
+                    logger.debug(f"{player_name} - Witheld items: {witheld_items}")     
+                    all_items = [event for event in all_items if event['to_player'] != player_id]       
+
+                events_to_send = non_item_events
+                if len(all_items) > 0:
+                    events_to_send.append({"type": "new_items", "data": all_items})
+
                 for event in events_to_send:
                     await websocket.send_json(event)
+
                 events_to_send = []
+
+                if len(witheld_items) > 0:
+                    logger.debug(f"{player_name} - Appending witheld items")
+                    events_to_send = [{"type": "new_items", "data": witheld_items}]
+                    witheld_items = []
+
             try:
                 payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.5)
             except asyncio.TimeoutError:

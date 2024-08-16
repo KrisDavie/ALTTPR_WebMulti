@@ -38,12 +38,9 @@ class Log(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
     player_id = Column(Integer, index=True, nullable=True)
     content = Column(String, index=True)
-
     session = relationship("MWSession", back_populates="logs")
-    user = relationship("User", back_populates="logs")
     
 
 class User(Base):
@@ -68,7 +65,6 @@ class User(Base):
     colour = Column(String, nullable=True)
     
     sessions = relationship("MWSession", secondary="user_sessions", back_populates="users")
-    logs = relationship("Log", back_populates="user")
     owned_sessions = relationship("MWSession", secondary="owned_sessions", back_populates="owners")
     events = relationship("Event", back_populates="user")
     sramstores = relationship("SRAMStore", back_populates="user")

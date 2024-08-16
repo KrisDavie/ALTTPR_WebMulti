@@ -97,20 +97,39 @@ export const sniApiSlice = createApi({
     sendManyItems: builder.mutation({
       async queryFn(arg: { memVals: any }, queryApi, extraOptions, baseQuery) {
         let state = queryApi.getState() as RootState
-        // We wait until receiving is set before actually sending items
-        queryApi.dispatch(log(`Sending ${arg.memVals.length} items. Waiting for state to be done receiving...`))
-        while (!state.multiworld.receiving) {
-          await new Promise(r => setTimeout(r, 250))
-          state = queryApi.getState() as RootState
-        }
-        queryApi.dispatch(log(`Done Receiving. Sending ${arg.memVals.length} items`))
-
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
         let connectedDevice = state.sni.connectedDevice
         if (!connectedDevice) {
           return { error: "No device or memory data" }
         }
+
+        // We wait until receiving is set before actually sending items
+        queryApi.dispatch(log(`Sending ${arg.memVals.length} items. Waiting for state to be done receiving and to be in game...`))
+        let game_mode = 0x00
+
+        // @ts-ignore
+        while (!state.multiworld.receiving || !ingame_modes.includes(game_mode)) {
+          const game_mode_response = await controlMem.singleRead({
+            uri: connectedDevice,
+            request: {
+              requestMemoryMapping: MemoryMapping.LoROM,
+              requestAddress: parseInt("f50010", 16),
+              requestAddressSpace: AddressSpace.FxPakPro,
+              size: 1,
+            },
+          })
+          if (!game_mode_response.response.response) {
+            return { error: "Error reading memory, no reposonse" }
+          }
+          game_mode = game_mode_response.response.response.data[0]
+          
+          await new Promise(r => setTimeout(r, 250))
+          state = queryApi.getState() as RootState
+        }
+        queryApi.dispatch(log(`Done Receiving and in game. Sending ${arg.memVals.length} items`))
+
+
 
         let writeResponse
         for (let i = 0; i < arg.memVals.length; i++) {
