@@ -89,7 +89,7 @@ oauth.register(
     api_base_url='https://discord.com/api/v10',
 )    
 
-models.Base.metadata.drop_all(bind=engine)
+# models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
 
 fernet = Fernet(os.environ.get("FERNET_SECRET"))

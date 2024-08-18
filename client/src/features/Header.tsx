@@ -16,7 +16,7 @@ import {
 import { Link } from "react-router-dom"
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { selectAvailableDevices } from "./sni/sniSlice"
-import { useGetDevicesQuery, useReadSRAMQuery } from "./sni/sniApiSlice"
+import { ingame_modes, useGetDevicesQuery, useReadSRAMQuery, useSendManyItemsMutation } from "./sni/sniApiSlice"
 import {
   Tooltip,
   TooltipContent,
@@ -52,6 +52,7 @@ function Header() {
   )
 
   const currentLog = useAppSelector(state => state.logger.log)
+  const [sendManyItems] = useSendManyItemsMutation()
 
   const [getPlayersQuery, players] = useLazyGetPlayersQuery()
   useEffect(() => {
@@ -65,13 +66,14 @@ function Header() {
     { pollingInterval: 1000, skip: devices.length > 0 },
   )
 
-  useReadSRAMQuery(
+  const sram = useReadSRAMQuery(
     {},
     {
       pollingInterval: 1000,
       skip: !sessionId || receiving || sram_updating_on_server,
     },
-  )
+  ).data
+
   const [reportGlow, setReportGlow] = useState(false)
 
   useEffect(() => {
@@ -82,6 +84,15 @@ function Header() {
       return () => clearInterval(interval)
     }
   }, [reportGlow])
+
+  useEffect(() => {
+    if (!sram || !sram['game_mode'] || receiving || !sessionId || !ingame_modes.includes(sram['game_mode'][0])) {
+      return
+    }
+    sendManyItems({
+        memVals: [],
+      })
+  }, [receiving, sessionId, sram])
 
   function saveLog() {
     // Add new lines to log entries, compress the log with gzip, and save it to a file in the browser

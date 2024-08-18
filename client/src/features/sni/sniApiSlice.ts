@@ -1,7 +1,7 @@
 import type { RootState } from "@/app/store"
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react"
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport"
-import { setConnectedDevice, setDeviceList, setGrpcConnected } from "./sniSlice"
+import { setConnectedDevice, setDeviceList, setGrpcConnected, shiftQueue } from "./sniSlice"
 import {
   DevicesClient,
   DeviceControlClient,
@@ -28,7 +28,7 @@ const hexStringToU8Arr = (hexString: string) => {
   return bytes ? Uint8Array.from(bytes) : new Uint8Array(0)
 }
 
-const ingame_modes = [0x07, 0x09, 0x0b]
+export const ingame_modes = [0x07, 0x09, 0x0b]
 const save_quit_modes = [0x00, 0x01, 0x17, 0x1B]
 
 type SRAMLocs = {
@@ -95,8 +95,14 @@ export const sniApiSlice = createApi({
     }),
 
     sendManyItems: builder.mutation({
-      async queryFn(arg: { memVals: any }, queryApi, extraOptions, baseQuery) {
+      async queryFn(arg: {memVals: any}, queryApi, extraOptions, baseQuery) {
         let state = queryApi.getState() as RootState
+        arg.memVals = [...state.sni.itemQueue]
+        if (arg.memVals.length === 0) {
+          return { error: "No items to send" }
+        }
+        queryApi.dispatch(setReceiving(true))
+
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
         let connectedDevice = state.sni.connectedDevice
@@ -132,13 +138,15 @@ export const sniApiSlice = createApi({
 
 
         let writeResponse
-        for (let i = 0; i < arg.memVals.length; i++) {
+        // for (let i = 0; i < arg.memVals.length; i++) {
+        while (state.sni.itemQueue.length > 0) {
+          let memVal = state.sni.itemQueue[0]
+          queryApi.dispatch(shiftQueue())
           let last_item_id = 255
-          let memVal = arg.memVals[i]
-          let last_event_idx
+          let last_event_idx = 0
 
           // Wait for the player to finish receiving before sending the next item
-          while (last_item_id > 0) {
+          while (last_item_id != 0) {
             const readCurItem = await controlMem.singleRead({
               uri: connectedDevice,
               request: {
@@ -152,10 +160,15 @@ export const sniApiSlice = createApi({
               return { error: "Error reading memory, no reposonse" }
             }
             last_item_id = readCurItem.response.response.data[2]
-            if (last_item_id === 0) {
-              last_event_idx =
+            last_event_idx =
                 readCurItem.response.response.data[0] * 256 +
                 readCurItem.response.response.data[1]
+            if (last_item_id === 0) {
+              if (last_event_idx === 0) {
+                // This should never be 0, but the rom sometimes sets it to 0 when changing state
+                // Wait for it to be a real value again
+                continue 
+              }
               queryApi.dispatch(log(`Last item finished, index was ${last_event_idx}`))
               break
             }
@@ -164,8 +177,8 @@ export const sniApiSlice = createApi({
 
           // Get index of current item and make sure it's greater than the last one so we don't resend any items
           const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
-          if (last_event_idx && last_event_idx >= event_idx) {
-            queryApi.dispatch(log(`Skipping item ${event_idx} as it is less than or equal to the last item ${last_event_idx}`))
+          if (event_idx !== last_event_idx + 1) {
+            queryApi.dispatch(log(`Skipping item ${event_idx} as it is not the next event after ${last_event_idx}`))
             continue
           }
 
@@ -184,6 +197,7 @@ export const sniApiSlice = createApi({
             },
           })
           queryApi.dispatch(log(`Done sending item ${memVal.event_data.item_name}`))
+          state = queryApi.getState() as RootState
         }
 
         // Sanity check to make sure the last item index was set, if not, set it
@@ -208,6 +222,7 @@ export const sniApiSlice = createApi({
             if (!readCurItem.response.response) {
               return { error: "Error reading memory, no reposonse" }
             }
+            console.log(readCurItem.response.response.data)
             
             last_item_id = readCurItem.response.response.data[2]
             if (last_item_id === 0) {
@@ -241,11 +256,9 @@ export const sniApiSlice = createApi({
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state
         await new Promise(r => setTimeout(r, 1000))
+        queryApi.dispatch(setReceiving(false))
         queryApi.dispatch(log(`Completed sending items`))
         return { data: writeResponse?.response.response?.requestAddress }
-      },
-      onQueryStarted: (arg, { dispatch }) => {
-        dispatch(setReceiving(true))
       },
     }),
     readSRAM: builder.query({
@@ -372,14 +385,7 @@ export const sniApiSlice = createApi({
           queryApi.dispatch(updateMemory(sram))
         }
 
-        return {
-          data: multiReadResponse.response.responses.map(res => {
-            return {
-              name: sram_locs[res.requestAddress][0],
-              data: Array.from(res.data), // Convert Uint8Array to Array to be able to serialize
-            }
-          }),
-        }
+        return { data: sram }
       },
     }),
   }),
@@ -390,4 +396,5 @@ export const {
   useLazyGetDevicesQuery,
   useResetMutation,
   useReadSRAMQuery,
+  useSendManyItemsMutation,
 } = sniApiSlice

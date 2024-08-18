@@ -2,12 +2,15 @@ import { createSlice } from "@reduxjs/toolkit"
 import { apiSlice } from "@/features/api/apiSlice"
 import { Event } from "@/app/types"
 
+export interface MemoryType {
+  [key: string]: number[]
+}
+
 type SliceState = {
   sessionId: string
   password: string
   events: Event[]
-  // TODO: This should actually be an object
-  memory?: string[]
+  memory?: MemoryType
   rom_name?: string
   player_id?: number
   receiving?: boolean
@@ -20,7 +23,7 @@ const initialState: SliceState = {
   sessionId: "",
   password: "",
   events: [],
-  memory: [],
+  memory: {},
   rom_name: "",
   player_id: 0,
   receiving: false,

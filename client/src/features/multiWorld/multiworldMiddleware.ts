@@ -13,10 +13,10 @@ import {
   updateMemory,
 } from "./multiworldSlice"
 import { nanoid } from "@reduxjs/toolkit"
-import { sniApiSlice } from "../sni/sniApiSlice"
 import { log } from "../loggerSlice"
 
 import type { RootState } from "@/app/store"
+import { addItemsToQueue } from "../sni/sniSlice"
 
 const types_to_adjust = [
   "new_items",
@@ -28,7 +28,6 @@ const types_to_adjust = [
 
 export const multiworldMiddleware: Middleware<{}, RootState> = api => {
   let socket: WebSocket | undefined
-  let socket_receiving = false
   return next => action => {
     if (!isAction(action)) {
       return next(action)
@@ -144,54 +143,46 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
 
           case "new_items":
             api.dispatch(log(`Received ${data.data.length} new items`))
-            socket_receiving = true
             const sorted_data = data.data
               .filter(
                 (item: any) => item.event_idx && item.event_idx.length == 2,
               )
               .sort(
                 (a: any, b: any) =>
-                  (a.event_idx[0] * 256 +
-                  a.event_idx[1]) -
+                  a.event_idx[0] * 256 +
+                  a.event_idx[1] -
                   (b.event_idx[0] * 256 + b.event_idx[1]),
               )
+
             sorted_data.forEach((item: any) => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
+
+            const self_data = sorted_data.filter(
+              (item: any) =>
+                item.from_player != currentState.multiworld.player_id &&
+                item.to_player == currentState.multiworld.player_id,
+            )
             api.dispatch(log(`Items:`))
-            sorted_data
-              .filter(
-                (item: any) =>
-                  item.from_player != currentState.multiworld.player_id &&
-                  item.to_player == currentState.multiworld.player_id,
-              )
-              .map((item: any) =>
-                api.dispatch(
-                  log(
-                    `IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`,
-                  ),
+            self_data.map((item: any) =>
+              api.dispatch(
+                log(
+                  `IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`,
                 ),
-              )
-            // @ts-expect-error
-            api
-              .dispatch(
-                // @ts-expect-error
-                sniApiSlice.endpoints.sendManyItems.initiate({
-                  memVals: sorted_data.filter(
+              ),
+            )
+            if (self_data.length > 0) {
+              api.dispatch(
+                addItemsToQueue(
+                  self_data.filter(
                     (item: any) =>
                       item.from_player != currentState.multiworld.player_id &&
                       item.to_player == currentState.multiworld.player_id,
                   ),
-                }),
+                ),
               )
-              .unwrap()
-              .then(() => {
-                api.dispatch(setReceiving(false))
-              })
-              .catch(() => {
-                api.dispatch(setReceiving(false))
-              })
+            }
 
             break
           default:
@@ -217,19 +208,13 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
     let currentState = api.getState() as RootState
     if (
       updateMemory.match(action) &&
-      !socket_receiving &&
+      !currentState.multiworld.receiving &&
       !currentState.multiworld.sram_updating_on_server
     ) {
       socket?.send(
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
       api.dispatch(setSramUpdatingOnServer(true))
-    }
-
-    if (setReceiving.match(action)) {
-      if (action.payload === false) {
-        socket_receiving = false
-      }
     }
 
     if (sendChatMessage.match(action)) {

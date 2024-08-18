@@ -7,8 +7,7 @@ export interface SniSliceState {
   grpcConnected: boolean
   deviceList: string[]
   connectedDevice?: string
-  memLocation?: number
-  memData?: Uint8Array
+  itemQueue: any[] // Maybe 
 }
 
 const initialState: SniSliceState = {
@@ -17,8 +16,7 @@ const initialState: SniSliceState = {
   grpcConnected: false,
   deviceList: [],
   connectedDevice: undefined,
-  memLocation: undefined,
-  memData: undefined,
+  itemQueue: [],
 }
 
 export const sniSlice = createSlice({
@@ -28,16 +26,25 @@ export const sniSlice = createSlice({
     setGrpcConnected: (state, action: PayloadAction<boolean>) => {
       state.grpcConnected = action.payload
     },
-    setMemLocation: (state, action: PayloadAction<number>) => {
-      state.memLocation = action.payload
-    },
-
-    setMemData: (state, action: PayloadAction<Uint8Array>) => {
-      state.memData = action.payload
-    },
-
     setGrpcHost: (state, action: PayloadAction<string>) => {
       state.grpcHost = action.payload
+    },
+    addItemsToQueue: (state, action: PayloadAction<string[]>) => {
+      state.itemQueue = [...state.itemQueue, ...action.payload].sort(
+        (a: any, b: any) =>
+          (a.event_idx[0] * 256 +
+          a.event_idx[1]) -
+          (b.event_idx[0] * 256 + b.event_idx[1]),
+      ).reduce((acc: any[], x: any) => {
+        const key = x.id
+        if (!acc.some((item: any) => item.id === key)) {
+          acc.push(x)
+        }
+        return acc
+      }, [])
+    },
+    shiftQueue: (state) => {
+      state.itemQueue.shift()
     },
     setGrpcPort: (state, action: PayloadAction<number>) => {
       state.grpcPort = action.payload
@@ -55,13 +62,13 @@ export const selectAvailableDevices = (state: { sni: SniSliceState }) =>
   state.sni.deviceList
 
 export const {
-  setMemLocation,
-  setMemData,
   setGrpcHost,
   setGrpcPort,
   setGrpcConnected,
   setDeviceList,
   setConnectedDevice,
+  addItemsToQueue,
+  shiftQueue,
 } = sniSlice.actions
 export default sniSlice.reducer 
 
