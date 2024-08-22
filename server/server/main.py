@@ -129,6 +129,11 @@ def verify_session_token(response: Response, request: Request, db: Annotated[Ses
         return False, False
     if len(user.session_tokens) == 0:
         return False, False
+    try:
+        fernet.decrypt(token.encode())
+    except:
+        response.delete_cookie("session_token")
+        raise HTTPException(status_code=401, detail="Invalid session token")
     if fernet.decrypt(token.encode()) not in [fernet.decrypt(x.encode()) for x in user.session_tokens]:
     # if fernet.decrypt(user.session_token.encode()) != fernet.decrypt(token.encode()):
         response.delete_cookie("session_token")
@@ -177,6 +182,7 @@ async def discord_auth(request: Request, response: Response, db: Annotated[Sessi
             user, token = verify_session_token(response, request, db)
         else:
             response.delete_cookie("session_token")
+            user, token = verify_session_token(response, request, db)
             raise HTTPException(status_code=401, detail="Invalid session token")
     # No user set in the browser
     if not user:
