@@ -89,9 +89,7 @@ function Header() {
     if (!sram || !sram['game_mode'] || receiving || !sessionId || !ingame_modes.includes(sram['game_mode'][0])) {
       return
     }
-    sendManyItems({
-        memVals: [],
-      })
+    sendManyItems({})
   }, [receiving, sessionId, sram])
 
   function saveLog() {
