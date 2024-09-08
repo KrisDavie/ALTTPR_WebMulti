@@ -2,7 +2,7 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useGetSessionEventsQuery, useGetPlayersQuery } from "../api/apiSlice"
 import MultiEventText from "./MultiEventText"
-import { FormEvent, FormEventHandler, useEffect, useRef, useState } from "react"
+import { FormEvent, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { sendChatMessage } from "./multiworldSlice"
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/popover"
 import { Settings2Icon } from "lucide-react"
 import { Label } from "@/components/ui/label"
+import { FixedSizeList, FixedSizeList as List } from "react-window"
 
 function MultiEventViewer(props: any) {
   const { sessionId } = props
@@ -31,28 +32,18 @@ function MultiEventViewer(props: any) {
   const [showChat, setShowChat] = useState(true)
   const [showSystem, setShowSystem] = useState(true)
 
-  function getMultiworldEventsText() {
-
+  function getFilteredEvents() {
     const sorted_events = multiworldEvents.filter((x: any) => x.timestamp).sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     )
-    let mwevents = sorted_events.map(event => {
+    return sorted_events.filter(event => {
       const { from_player, to_player } = event
       const event_type = event["event_type"] as string
 
       // Filter events
-
       if (
         // System events
-        ([
-          "init_success",
-          "player_join",
-          "player_leave",
-          "player_forfeit",
-          "player_pause_receive",
-          "player_resume_receive",
-        ].includes(event_type) &&
-          !showSystem) ||
+        ([ "init_success", "player_join", "player_leave", "player_forfeit", "player_pause_receive", "player_resume_receive" ].includes(event_type) && !showSystem) ||
         // Item filters
         (event_type === "new_item" && currentPlayer &&
           (
@@ -61,48 +52,35 @@ function MultiEventViewer(props: any) {
             // Others items
             (to_player !== currentPlayer && !showOtherItems) ||
             // Same player items
-            (from_player == -1 ||
-              (from_player == to_player && !showSamePlayerItems)))
-          ) ||
+            (from_player == -1 || (from_player == to_player && !showSamePlayerItems))
+          )) ||
         // Chat messages
         (event_type === "chat" && !showChat)
       ) {
-        return
+        return false
       }
-      return <MultiEventText key={event.id} event={event} players={players} />
+      return true
     })
-
-    mwevents = mwevents.filter((x: any) => x !== undefined)
-
-    // deduplicate based on key
-    mwevents = mwevents.reduce((acc: any[], x: any) => {
-      const key = x.key
-      if (!acc.some((item: any) => item.key === key)) {
-        acc.push(x)
-      }
-      return acc
-    }, [])
-    return mwevents
   }
 
-  const eventContainerRef = useRef<HTMLDivElement>(null)
+  const filteredEvents = getFilteredEvents()
+
+  const eventContainerRef = useRef<FixedSizeList>(null)
   const scrollPrimitiveRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (eventContainerRef.current && !hasScrolled) {
-      eventContainerRef.current.scrollIntoView(false)
+      eventContainerRef.current.scrollToItem(filteredEvents.length - 1)
     }
   }, [multiworldEvents])
 
-  const handleOnWheel = (event: any) => {
-    if (!scrollPrimitiveRef.current) {
+  const handleOnScroll = (event: any) => {
+    if (!eventContainerRef.current) {
       return
     }
-
     if (
-      (scrollPrimitiveRef.current.scrollHeight <=
-      scrollPrimitiveRef.current.scrollTop +
-        scrollPrimitiveRef.current.clientHeight + event.deltaY)
+      // @ts-expect-error - height is a number because we're using a vertical list
+      event.scrollOffset >= ((eventContainerRef.current.props.itemCount * eventContainerRef.current.props.itemSize) - eventContainerRef.current.props.height)
     ) {
       setHasScrolled(false)
       return
@@ -112,28 +90,34 @@ function MultiEventViewer(props: any) {
 
   const handleScrollToBottom = () => {
     if (eventContainerRef.current) {
-      eventContainerRef.current.scrollIntoView(false)
+      eventContainerRef.current.scrollToItem(filteredEvents.length - 1)
       setHasScrolled(false)
     }
   }
+
   function handleChatSubmit(event: FormEvent<HTMLFormElement>): void {
     dispatch(sendChatMessage({ message: chatMessage }))
     setChatMessage("")
     event.preventDefault()
   }
 
+  const Row = ({ index, style }: { index: number, style: React.CSSProperties }) => {
+    const event = filteredEvents[index]
+    return (
+      <div style={style}>
+        <MultiEventText key={event.id} event={event} players={players} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col max-w-6xl">
-      <ScrollArea
-        className="h-72 w-4/5 rounded-md border"
-        onWheel={handleOnWheel}
-        scrollPrimitiveRef={scrollPrimitiveRef}
-      >
+      <div className="h-72 w-4/5 rounded-md border relative">
         <Popover>
           <PopoverTrigger asChild>
             <Button
               size="icon"
-              className="h-8 w-8 absolute top-3 right-3 opacity-50"
+              className="h-8 w-8 absolute top-3 right-3 opacity-50 z-10"
             >
               <Settings2Icon />
             </Button>
@@ -195,18 +179,6 @@ function MultiEventViewer(props: any) {
                     System messages
                   </Label>
                 </div>
-                {/* <div className="grid grid-cols-5 items-center gap-1">
-                  <Input
-                    type="checkbox"
-                    id="same_player"
-                    className="col-span-1 h-4"
-                    onChange={e => setShowSamePlayerItems(e.target.checked)}
-                    checked={showSamePlayerItems}
-                  />
-                  <Label htmlFor="same_player" className="col-span-4">
-                    Items to and from the same player
-                  </Label>
-                </div> */}
               </div>
             </div>
           </PopoverContent>
@@ -214,9 +186,16 @@ function MultiEventViewer(props: any) {
         {isLoading || playersLoading || !multiworldEvents ? (
           <div>Loading... ({isLoading})</div>
         ) : (
-          <div key="multi_events" ref={eventContainerRef}>
-            {getMultiworldEventsText()}
-          </div>
+          <List
+            height={288} // height of the ScrollArea
+            itemCount={filteredEvents.length}
+            itemSize={24} // height of each item
+            width="100%"
+            onScroll={handleOnScroll}
+            ref={eventContainerRef}
+          >
+            {Row}
+          </List>
         )}
         {hasScrolled && (
           <Button
@@ -226,7 +205,7 @@ function MultiEventViewer(props: any) {
             Scroll to bottom
           </Button>
         )}
-      </ScrollArea>
+        </div>
       <form
         id="chatBox"
         className="h-8 w-4/5 mt-2 rounded-md flex flex-row"
