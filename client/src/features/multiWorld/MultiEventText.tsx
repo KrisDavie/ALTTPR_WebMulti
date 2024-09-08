@@ -83,42 +83,58 @@ function MultiEventText(props: any) {
   "Small Key (Universal)",
   ]
 
+  var final_content: JSX.Element | null = null
+  var key = event.id
+
   switch (event_type) {
     case "init_success":
-      return (<div>[{dt.toLocaleString()}] Successfully connected to the multiworld server as {from_player_name}</div>)
+      final_content = <>[{dt.toLocaleString()}] Successfully connected to the multiworld server as {from_player_name}</>
+      break;
     case "player_join":
-      return (<div>[{dt.toLocaleString()}] {from_player_name} joined the game</div>)
+      final_content = <>[{dt.toLocaleString()}] {from_player_name} joined the game</>
+      break;
     case "player_leave":
-      return (<div>[{dt.toLocaleString()}] {from_player_name} left the game</div>)
+      final_content = <>[{dt.toLocaleString()}] {from_player_name} left the game</>
+      break;
     case "player_forfeit":
-      return (<div>[{dt.toLocaleString()}] {from_player_name} forfeited</div>)
+      final_content = <>[{dt.toLocaleString()}] {from_player_name} forfeited!</>
+      break;
     case "player_pause_receive":
-      return (<div>[{dt.toLocaleString()}] {from_player_name} paused item receiving</div>)
+      final_content = <>[{dt.toLocaleString()}] {from_player_name} paused item receiving</>
+      break;
     case "player_resume_receive":
-      return (<div>[{dt.toLocaleString()}] {from_player_name} resumed item receiving</div>)
+      final_content = <>[{dt.toLocaleString()}] {from_player_name} resumed item receiving</>
+      break;
     case "chat":
-      var key = `${event.event_historical ? "old_" : ""}${event.id}_msg`
-      return (
-        <div key={key}>
+      key = `${event.event_historical ? "old_" : ""}${event.id}_msg`
+      final_content = 
+        <>
           [{dt.toLocaleString()}]{" "}
           <span className="font-bold">{from_player_name}</span>:{" "}
           {event_data["message"]}
-        </div>
-      )
+        </>
+      break;
     case "new_item":
       const { item_name, location_name } = event_data
-      var key = `${event.event_historical ? "old_" : ""}${event.id}_item`
-      return (
-        <div key={key}>
+      key = `${event.event_historical ? "old_" : ""}${event.id}_item`
+      final_content = 
+        <>
           [{dt.toLocaleString()}] New Item: {" "}
           <span className={`${key_items.includes(item_name) ? "font-bold" : ""}`}>{item_name}</span> from{" "}
           <span className="font-bold">{from_player_name}</span> to{" "}
           <span className="font-bold">{to_player_name}</span> ({location_name})
-        </div>
-      )
+        </>
+      break;
     default:
-      return null
+      // final_content = <>[{dt.toLocaleString()}] Unknown event type: {event_type}</>
+      return
   }
+
+  return (
+    <div className="h-6" key={key}>
+      {final_content}
+    </div>
+  )
 }
 
 export default MultiEventText

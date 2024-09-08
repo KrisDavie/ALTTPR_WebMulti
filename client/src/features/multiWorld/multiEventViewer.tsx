@@ -26,43 +26,53 @@ function MultiEventViewer(props: any) {
   const [chatMessage, setChatMessage] = useState("")
   const initComplete = useAppSelector(state => state.multiworld.init_complete)
   const [showSelfItems, setShowSelfItems] = useState(true)
-  const [showSamePlayerItems, setShowSamePlayerItems] = useState(true)
+  const [showSamePlayerItems, setShowSamePlayerItems] = useState(false)
   const [showOtherItems, setShowOtherItems] = useState(true)
   const [showChat, setShowChat] = useState(true)
   const [showSystem, setShowSystem] = useState(true)
 
   function getMultiworldEventsText() {
-    let mwevents = multiworldEvents.map(event => {
+
+    const sorted_events = multiworldEvents.filter((x: any) => x.timestamp).sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+    let mwevents = sorted_events.map(event => {
       const { from_player, to_player } = event
       const event_type = event["event_type"] as string
 
+      // Filter events
+
       if (
-        [
+        // System events
+        ([
           "init_success",
           "player_join",
           "player_leave",
           "player_forfeit",
+          "player_pause_receive",
+          "player_resume_receive",
         ].includes(event_type) &&
-        !showSystem
-      ) {
-        return
-      } else if (
-        (event_type === "new_item" &&
-          currentPlayer &&
-          ((to_player === currentPlayer && !showSelfItems) ||
-            (to_player !== currentPlayer && !showOtherItems))) ||
+          !showSystem) ||
+        // Item filters
+        (event_type === "new_item" && currentPlayer &&
+          (
+            // Self items
+            (to_player === currentPlayer && !showSelfItems) ||
+            // Others items
+            (to_player !== currentPlayer && !showOtherItems) ||
+            // Same player items
+            (from_player == -1 ||
+              (from_player == to_player && !showSamePlayerItems)))
+          ) ||
+        // Chat messages
         (event_type === "chat" && !showChat)
-      ) {
-        return
-      } else if (
-        event_type === "new_item" &&
-        (from_player == -1 ||
-          (from_player == to_player && !showSamePlayerItems))
       ) {
         return
       }
       return <MultiEventText key={event.id} event={event} players={players} />
     })
+
+    mwevents = mwevents.filter((x: any) => x !== undefined)
 
     // deduplicate based on key
     mwevents = mwevents.reduce((acc: any[], x: any) => {
@@ -88,7 +98,7 @@ function MultiEventViewer(props: any) {
     if (!scrollPrimitiveRef.current) {
       return
     }
-    
+
     if (
       (scrollPrimitiveRef.current.scrollHeight <=
       scrollPrimitiveRef.current.scrollTop +
