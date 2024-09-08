@@ -88,11 +88,11 @@ function MultiEventViewer(props: any) {
     if (!scrollPrimitiveRef.current) {
       return
     }
-
+    
     if (
-      scrollPrimitiveRef.current?.scrollHeight ===
-      scrollPrimitiveRef.current?.scrollTop +
-        scrollPrimitiveRef.current?.clientHeight
+      (scrollPrimitiveRef.current.scrollHeight <=
+      scrollPrimitiveRef.current.scrollTop +
+        scrollPrimitiveRef.current.clientHeight + event.deltaY)
     ) {
       setHasScrolled(false)
       return
