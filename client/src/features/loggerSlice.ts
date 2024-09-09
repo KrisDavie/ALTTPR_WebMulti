@@ -18,7 +18,6 @@ export const loggerSlice = createSlice({
     reducers: {
         log: (state, action) => {
             if (!state.enabled) return
-            console.log(`[${new Date().toLocaleString()}] ${action.payload}`);
             state.log.push(`[${new Date().toLocaleString()}] ${action.payload}`);
         },
     },

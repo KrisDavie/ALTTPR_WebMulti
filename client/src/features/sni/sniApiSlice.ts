@@ -101,6 +101,9 @@ export const sniApiSlice = createApi({
         if (curQueue.length === 0) {
           return { error: "No items to send" }
         }
+        if (state.multiworld.receiving) {
+          return { error: "Already receiving" }
+        }
         queryApi.dispatch(setReceiving(true))
 
         const transport = getTransport(state)
@@ -140,6 +143,7 @@ export const sniApiSlice = createApi({
         let writeResponse
         // for (let i = 0; i < arg.memVals.length; i++) {
         while (state.sni.itemQueue.length > 0) {
+          state = queryApi.getState() as RootState
           let memVal = state.sni.itemQueue[0]
           const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
           queryApi.dispatch(shiftQueue())
@@ -179,7 +183,6 @@ export const sniApiSlice = createApi({
           // Get index of current item and make sure it's greater than the last one so we don't resend any items
           if (event_idx !== last_event_idx + 1) {
             queryApi.dispatch(log(`Skipping item ${event_idx} as it is not the next event after ${last_event_idx}`))
-            state = queryApi.getState() as RootState
             await new Promise(r => setTimeout(r, 50))
             continue
           }
@@ -199,7 +202,6 @@ export const sniApiSlice = createApi({
             },
           })
           queryApi.dispatch(log(`Done sending item ${memVal.event_data.item_name}. Getting new state.`))
-          state = queryApi.getState() as RootState
         }
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state

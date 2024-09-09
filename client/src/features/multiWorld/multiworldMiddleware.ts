@@ -67,7 +67,6 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         if (!data.id) {
           data.id = nanoid()
         }
-        api.dispatch(log(`Received event: ${data.type}`))
         if (!types_to_adjust.includes(data.type)) {
           api.dispatch(addEvent(data))
         }
