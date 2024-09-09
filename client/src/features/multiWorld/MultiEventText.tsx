@@ -105,6 +105,9 @@ function MultiEventText(props: any) {
     case "player_resume_receive":
       final_content = <>[{dt.toLocaleString()}] {from_player_name} resumed item receiving</>
       break;
+    case "session_create":
+      final_content = <>[{dt.toLocaleString()}] Session {event_data['session_id']} created</>
+      break;
     case "chat":
       key = `${event.event_historical ? "old_" : ""}${event.id}_msg`
       final_content = 

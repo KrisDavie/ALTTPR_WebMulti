@@ -43,7 +43,7 @@ function MultiEventViewer(props: any) {
       // Filter events
       if (
         // System events
-        ([ "init_success", "player_join", "player_leave", "player_forfeit", "player_pause_receive", "player_resume_receive" ].includes(event_type) && !showSystem) ||
+        ([ "init_success", "player_join", "player_leave", "player_forfeit", "player_pause_receive", "player_resume_receive", "session_create"].includes(event_type) && !showSystem) ||
         // Item filters
         (event_type === "new_item" && currentPlayer &&
           (
@@ -110,14 +110,18 @@ function MultiEventViewer(props: any) {
     )
   }
 
+  const allEventsFiltered = () => {
+    return !showSelfItems && !showSamePlayerItems && !showOtherItems && !showChat && !showSystem
+  }
+
   return (
-    <div className="flex flex-col max-w-6xl">
+    <div className="flex flex-col max-w-6xl mt-2">
       <div className="h-72 w-4/5 rounded-md border relative">
         <Popover>
           <PopoverTrigger asChild>
             <Button
               size="icon"
-              className="h-8 w-8 absolute top-3 right-3 opacity-50 z-10"
+              className={"h-8 w-8 absolute top-3 right-3 opacity-50 z-10" + (allEventsFiltered() ? " bg-red-500" : "")}
             >
               <Settings2Icon />
             </Button>
@@ -138,6 +142,7 @@ function MultiEventViewer(props: any) {
                     className="col-span-1 h-4"
                     onChange={e => setShowSelfItems(e.target.checked)}
                     checked={showSelfItems}
+                    disabled={currentPlayer === 0}
                   />
                   <Label htmlFor="items_to_player" className="col-span-4">
                     Items for you
@@ -150,6 +155,7 @@ function MultiEventViewer(props: any) {
                     className="col-span-1 h-4"
                     onChange={e => setShowOtherItems(e.target.checked)}
                     checked={showOtherItems}
+                    disabled={currentPlayer === 0}
                   />
                   <Label htmlFor="items_to_others" className="col-span-4">
                     Items for other players
