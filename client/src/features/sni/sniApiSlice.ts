@@ -48,6 +48,7 @@ const sram_locs: SRAMLocs = {
   0xf66018: ["pots", 0x250],
   0xf66268: ["sprites", 0x250],
   0xf664b8: ["shops", 0x29],
+  0xf5f472: ["prizes", 0x2]
 }
 
 export const sniApiSlice = createApi({

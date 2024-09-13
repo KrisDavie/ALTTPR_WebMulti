@@ -132,6 +132,10 @@
             288,
             16
         ],
+        "Cold Fairy Statue": [
+            288,
+            512
+        ],
         "Bonk Rock Cave": [
             292,
             16
@@ -9054,5 +9058,183 @@
         "Take-Any #3 Item 2": 4194342,
         "Take-Any #4 Item 1": 4194343,
         "Take-Any #4 Item 2": 4194344
+    },
+    "bosses": {
+        "Eastern Palace - Prize": 8192,
+        "Desert Palace - Prize": 4096,
+        "Tower of Hera - Prize": 32,
+        "Palace of Darkness - Prize": 512,
+        "Thieves' Town - Prize": 16,
+        "Skull Woods - Prize": 128,
+        "Swamp Palace - Prize": 1024,
+        "Ice Palace - Prize": 64,
+        "Misery Mire - Prize": 256,
+        "Turtle Rock - Prize": 8
+    },
+    "bonk_prizes": {
+        "Lost Woods Hideout Tree": [
+            0,
+            16
+        ],
+        "Death Mountain Bonk Rocks": [
+            5,
+            16
+        ],
+        "Mountain Pass Pull Tree": [
+            10,
+            16
+        ],
+        "Mountain Pass Southeast Tree": [
+            10,
+            8
+        ],
+        "Lost Woods Pass West Tree": [
+            16,
+            16
+        ],
+        "Kakariko Portal Tree": [
+            16,
+            8
+        ],
+        "Fortune Bonk Rocks": [
+            17,
+            16
+        ],
+        "Kakariko Pond Tree": [
+            18,
+            16
+        ],
+        "Bonk Rocks Tree": [
+            19,
+            16
+        ],
+        "Sanctuary Tree": [
+            19,
+            8
+        ],
+        "River Bend West Tree": [
+            21,
+            16
+        ],
+        "River Bend East Tree": [
+            21,
+            8
+        ],
+        "Blinds Hideout Tree": [
+            24,
+            16
+        ],
+        "Kakariko Welcome Tree": [
+            24,
+            8
+        ],
+        "Forgotten Forest Southwest Tree": [
+            26,
+            16
+        ],
+        "Forgotten Forest Central Tree": [
+            26,
+            8
+        ],
+        "Hyrule Castle Tree": [
+            27,
+            16
+        ],
+        "Wooden Bridge Tree": [
+            29,
+            16
+        ],
+        "Eastern Palace Tree": [
+            30,
+            16
+        ],
+        "Flute Boy South Tree": [
+            42,
+            16
+        ],
+        "Flute Boy East Tree": [
+            42,
+            8
+        ],
+        "Central Bonk Rocks Tree": [
+            43,
+            16
+        ],
+        "Tree Line Tree 2": [
+            46,
+            16
+        ],
+        "Tree Line Tree 4": [
+            46,
+            8
+        ],
+        "Flute Boy Approach South Tree": [
+            50,
+            16
+        ],
+        "Flute Boy Approach North Tree": [
+            50,
+            8
+        ],
+        "Dark Lumberjack Tree": [
+            66,
+            16
+        ],
+        "Dark Fortune Bonk Rocks (Drop 1)": [
+            81,
+            16
+        ],
+        "Dark Fortune Bonk Rocks (Drop 2)": [
+            81,
+            8
+        ],
+        "Dark Graveyard West Bonk Rocks": [
+            84,
+            16
+        ],
+        "Dark Graveyard North Bonk Rocks": [
+            84,
+            8
+        ],
+        "Dark Graveyard Tomb Bonk Rocks": [
+            84,
+            4
+        ],
+        "Qirn Jump West Tree": [
+            85,
+            16
+        ],
+        "Qirn Jump East Tree": [
+            85,
+            8
+        ],
+        "Dark Witch Tree": [
+            86,
+            16
+        ],
+        "Pyramid Tree": [
+            91,
+            16
+        ],
+        "Palace of Darkness Tree": [
+            94,
+            16
+        ],
+        "Dark Tree Line Tree 2": [
+            110,
+            16
+        ],
+        "Dark Tree Line Tree 3": [
+            110,
+            8
+        ],
+        "Dark Tree Line Tree 4": [
+            110,
+            4
+        ],
+        "Hype Cave Statue": [
+            116,
+            16
+        ]
     }
 }
