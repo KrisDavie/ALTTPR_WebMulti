@@ -184,6 +184,30 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             }
 
             break
+          case "player_pause_receive":
+            api.dispatch(
+              addEvent({
+                event_type: "player_pause_receive",
+                from_player: data.data.from_player,
+                to_player: -1,
+                timestamp: data.data.timestamp * 1000,
+                event_data: {},
+                id: nanoid(),
+              }),
+            )
+            break;
+          case "player_resume_receive":
+            api.dispatch(
+              addEvent({
+                event_type: "player_resume_receive",
+                from_player: data.data.from_player,
+                to_player: -1,
+                timestamp: data.data.timestamp * 1000,
+                event_data: {},
+                id: nanoid(),
+              }),
+            )
+            break;
           default:
             console.log("Unknown event type: " + data.type)
             break
@@ -213,7 +237,6 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       socket?.send(
         JSON.stringify({ type: "update_memory", data: action.payload }),
       )
-      api.dispatch(setSramUpdatingOnServer(true))
     }
 
     if (sendChatMessage.match(action)) {

@@ -99,6 +99,9 @@ export const sniApiSlice = createApi({
       async queryFn(arg: {}, queryApi, extraOptions, baseQuery) {
         let state = queryApi.getState() as RootState
         let curQueue = [...state.sni.itemQueue]
+        if (state.multiworld.receiving_paused) {
+          return { error: "Receiving is paused" }
+        }
         if (curQueue.length === 0) {
           return { error: "No items to send" }
         }
@@ -111,6 +114,7 @@ export const sniApiSlice = createApi({
         let controlMem = new DeviceMemoryClient(transport)
         let connectedDevice = state.sni.connectedDevice
         if (!connectedDevice) {
+          queryApi.dispatch(setReceiving(false))
           return { error: "No device or memory data" }
         }
 
@@ -130,6 +134,7 @@ export const sniApiSlice = createApi({
             },
           })
           if (!game_mode_response.response.response) {
+            queryApi.dispatch(setReceiving(false))
             return { error: "Error reading memory, no reposonse" }
           }
           game_mode = game_mode_response.response.response.data[0]
@@ -139,13 +144,19 @@ export const sniApiSlice = createApi({
         }
         queryApi.dispatch(log(`Done Receiving and in game. Sending ${curQueue.length} items`))
 
-
-
         let writeResponse
         // for (let i = 0; i < arg.memVals.length; i++) {
+        state = queryApi.getState() as RootState
         while (state.sni.itemQueue.length > 0) {
           state = queryApi.getState() as RootState
+          if (state.multiworld.receiving_paused) {
+            await new Promise(r => setTimeout(r, 500))
+            continue
+          }
           let memVal = state.sni.itemQueue[0]
+          if (!memVal) {
+            continue;
+          }
           const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
           queryApi.dispatch(shiftQueue())
           let last_item_id = 255

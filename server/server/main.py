@@ -470,9 +470,6 @@ async def player_forfeit(
             logger.error(
                 f"Player {player_id} - Sent item not in player's items: {sent_event.location}"
             )
-
-    
-    logger.debug(f"Player {player_id} - Forfeited {response['found_item_count']} items, making events")
     ff_events = [
         schemas.EventCreate(
                 session_id=session.id,
@@ -601,8 +598,8 @@ async def websocket_endpoint(
     events_to_send = []
     should_close = False
     skip_update = 0
-    receiving_paused = False
     witheld_items = []
+    processing_sram = False
 
     await websocket.send_json({"type": "init_success"})
 
@@ -612,7 +609,6 @@ async def websocket_endpoint(
         nonlocal should_close
         nonlocal events_to_send
         nonlocal skip_update
-        nonlocal receiving_paused
 
         if target_event.session_id != session.id:
             return
@@ -624,17 +620,6 @@ async def websocket_endpoint(
             # TODO: Actually handle this
             should_close = True
             return
-        elif (target_event.event_type == models.EventTypes.player_pause_receive) and (target_event.from_player == player_id):
-            receiving_paused = True
-            return
-        elif target_event.event_type == models.EventTypes.player_resume_receive and (target_event.from_player == player_id):
-            receiving_paused = False
-            return
-        # elif (
-        #     target_event.event_type == models.EventTypes.new_item
-        #     and target_event.to_player == player_id
-        # ):
-        #     return
 
         new_event = {
             "type": target_event.event_type.name,
@@ -771,13 +756,7 @@ async def websocket_endpoint(
                 logger.debug(f"{player_name} - {len(all_items)} - {all_items}")
                 logger.debug(f"{player_name} - {len(events_to_send)} - {events_to_send}")
 
-                non_item_events = [event for event in events_to_send if event["type"] != "new_items"]
-
-                if receiving_paused:
-                    logger.debug(f"{player_name} - Sending is paused")
-                    witheld_items = [event for event in all_items if event['to_player'] == player_id]   
-                    logger.debug(f"{player_name} - Witheld items: {witheld_items}")     
-                    all_items = [event for event in all_items if event['to_player'] != player_id]       
+                non_item_events = [event for event in events_to_send if event["type"] != "new_items"]   
 
                 events_to_send = non_item_events
                 if len(all_items) > 0:
@@ -845,106 +824,109 @@ async def websocket_endpoint(
                 continue
             elif payload["type"] == "update_memory":
                 # Update the memory for the session
-                    logger.debug(f"Got SRAM update from {player_name}")
-                    if skip_update > 0:
-                        logger.debug(f"Skipping update for {player_name}")
-                        skip_update -= 1
-                        await websocket.send_json({"type": "sram_updated"})
-                        continue 
-
-                    sramstore = schemas.SRAMStoreCreate(
-                        session_id=session.id,
-                        player=player_id,
-                        sram=json.dumps(payload["data"]),
-                    )
-                    # NOTE: This sram store could be moved to on disconnect only if we want to save on writes
-                    old_sram, new_sram = crud.update_sramstore(db, sramstore)
-
-                    if old_sram == None:
-                        await websocket.send_json({"type": "sram_updated"})
-                        continue
-
-                    sram_diff = sram.sram_diff(new_sram, old_sram)
-
-                    if len(sram_diff) == 0:
-                        await websocket.send_json({"type": "sram_updated"})
-                        continue
-
-                    locations = sram.get_changed_locations(sram_diff, new_sram)
-
-                    for location in locations:
-                        loc_id = int(loc_data.lookup_name_to_id[location])
-
-                        if (loc_id, player_id) not in multidata_locs:
-                            logger.error(
-                                f"{player_name} - Location not in multidata_locs: {location} [{loc_id}]"
-                            )
-                            continue
-                        item_id, item_player = multidata_locs[(loc_id, player_id)]
-
-                        if loc_id not in checked_locations:
-                            logger.info(
-                                f"{player_name} - New Location Checked: {location} [{loc_id}]"
-                            )
-
-                            crud.create_event(
-                                db,
-                                schemas.EventCreate(
-                                    session_id=session.id,
-                                    event_type=models.EventTypes.new_item,
-                                    from_player=player_id,
-                                    to_player=item_player,
-                                    item_id=item_id,
-                                    location=loc_id,
-                                    event_data={
-                                        "item_name": loc_data.item_table[str(item_id)],
-                                        "location_name": location,
-                                    },
-                                ),
-                            )
-                            checked_locations.add(loc_id)
-
-                    # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
-                    last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
-                    to_player_events = crud.get_items_for_player_from_others(
-                        db, session.id, player_id, gt_idx=last_event
-                    )
-                    for event in to_player_events:
-                        item_name = loc_data.item_table[str(event.item_id)]
-                        logger.info(
-                            f"{player_name} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
-                        )
-                        events_to_send.append(
-                            {
-                                "type": "new_item",
-                                "data": {
-                                    "id": event.id,
-                                    "timestamp": int(
-                                        time.mktime(event.timestamp.timetuple())
-                                    ),
-                                    "event_type": event.event_type.name,
-                                    "from_player": event.from_player,
-                                    "to_player": event.to_player,
-                                    "event_idx": list(
-                                        event.to_player_idx.to_bytes(2, "big")
-                                    ),
-                                    "item_id": loc_data.item_table_reversed[item_name],
-                                    "location": event.location,
-                                    "event_data": {
-                                        "item_name": item_name,
-                                        "location_name": loc_data.lookup_id_to_name[
-                                            str(event.location)
-                                        ],
-                                    },
-                                },
-                            }
-                        )
-                        last_event = event.id
-
-                    logger.debug(f"{player_name} - Finished processing sram update")
-                    await websocket.send_json({"type": "sram_updated"})
-                    logger.debug(f"{player_name} - Sent sram_updated")
+                if processing_sram:
                     continue
+                processing_sram = True
+
+                logger.debug(f"Got SRAM update from {player_name}")
+                if skip_update > 0:
+                    logger.debug(f"Skipping update for {player_name}")
+                    skip_update -= 1
+                    processing_sram = False
+                    continue 
+
+                sramstore = schemas.SRAMStoreCreate(
+                    session_id=session.id,
+                    player=player_id,
+                    sram=json.dumps(payload["data"]),
+                )
+                # NOTE: This sram store could be moved to on disconnect only if we want to save on writes
+                old_sram, new_sram = crud.update_sramstore(db, sramstore)
+
+                if old_sram == None:
+                    processing_sram = False
+                    continue
+
+                sram_diff = sram.sram_diff(new_sram, old_sram)
+
+                if len(sram_diff) == 0:
+                    processing_sram = False
+                    continue
+
+                locations = sram.get_changed_locations(sram_diff, new_sram)
+
+                for location in locations:
+                    loc_id = int(loc_data.lookup_name_to_id[location])
+
+                    if (loc_id, player_id) not in multidata_locs:
+                        logger.error(
+                            f"{player_name} - Location not in multidata_locs: {location} [{loc_id}]"
+                        )
+                        continue
+                    item_id, item_player = multidata_locs[(loc_id, player_id)]
+
+                    if loc_id not in checked_locations:
+                        logger.info(
+                            f"{player_name} - New Location Checked: {location} [{loc_id}]"
+                        )
+
+                        crud.create_event(
+                            db,
+                            schemas.EventCreate(
+                                session_id=session.id,
+                                event_type=models.EventTypes.new_item,
+                                from_player=player_id,
+                                to_player=item_player,
+                                item_id=item_id,
+                                location=loc_id,
+                                event_data={
+                                    "item_name": loc_data.item_table[str(item_id)],
+                                    "location_name": location,
+                                },
+                            ),
+                        )
+                        checked_locations.add(loc_id)
+
+                # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
+                last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
+                to_player_events = crud.get_items_for_player_from_others(
+                    db, session.id, player_id, gt_idx=last_event
+                )
+                for event in to_player_events:
+                    item_name = loc_data.item_table[str(event.item_id)]
+                    logger.info(
+                        f"{player_name} - Player doesn't have {item_name} from {event.from_player} id: {event.id}. Resending"
+                    )
+                    events_to_send.append(
+                        {
+                            "type": "new_item",
+                            "data": {
+                                "id": event.id,
+                                "timestamp": int(
+                                    time.mktime(event.timestamp.timetuple())
+                                ),
+                                "event_type": event.event_type.name,
+                                "from_player": event.from_player,
+                                "to_player": event.to_player,
+                                "event_idx": list(
+                                    event.to_player_idx.to_bytes(2, "big")
+                                ),
+                                "item_id": loc_data.item_table_reversed[item_name],
+                                "location": event.location,
+                                "event_data": {
+                                    "item_name": item_name,
+                                    "location_name": loc_data.lookup_id_to_name[
+                                        str(event.location)
+                                    ],
+                                },
+                            },
+                        }
+                    )
+                    last_event = event.id
+
+                logger.debug(f"{player_name} - Finished processing sram update")
+                processing_sram = False
+                continue
             else:
                 logger.error(f"Unknown message: {payload}")
                 continue

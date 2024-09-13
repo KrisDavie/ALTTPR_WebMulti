@@ -33,9 +33,12 @@ function MultiEventViewer(props: any) {
   const [showSystem, setShowSystem] = useState(true)
 
   function getFilteredEvents() {
-    const sorted_events = multiworldEvents.filter((x: any) => x.timestamp).sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
+    const sorted_events = multiworldEvents
+      .filter((x: any) => x.timestamp)
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      )
     return sorted_events.filter(event => {
       const { from_player, to_player } = event
       const event_type = event["event_type"] as string
@@ -43,17 +46,26 @@ function MultiEventViewer(props: any) {
       // Filter events
       if (
         // System events
-        ([ "init_success", "player_join", "player_leave", "player_forfeit", "player_pause_receive", "player_resume_receive", "session_create"].includes(event_type) && !showSystem) ||
+        ([
+          "init_success",
+          "player_join",
+          "player_leave",
+          "player_forfeit",
+          "player_pause_receive",
+          "player_resume_receive",
+          "session_create",
+        ].includes(event_type) &&
+          !showSystem) ||
         // Item filters
-        (event_type === "new_item" && currentPlayer &&
-          (
-            // Self items
-            (to_player === currentPlayer && !showSelfItems) ||
+        (event_type === "new_item" &&
+          currentPlayer &&
+          // Self items
+          ((to_player === currentPlayer && !showSelfItems) ||
             // Others items
             (to_player !== currentPlayer && !showOtherItems) ||
             // Same player items
-            (from_player == -1 || (from_player == to_player && !showSamePlayerItems))
-          )) ||
+            from_player == -1 ||
+            (from_player == to_player && !showSamePlayerItems))) ||
         // Chat messages
         (event_type === "chat" && !showChat)
       ) {
@@ -63,7 +75,20 @@ function MultiEventViewer(props: any) {
     })
   }
 
-  const filteredEvents = getFilteredEvents()
+  let filteredEvents = getFilteredEvents()
+
+  filteredEvents = filteredEvents.reduce((acc: any[], x: any) => {
+    const id = x.id
+    const historical = x.event_historical
+    if (
+      !acc.some(
+        (item: any) => item.id === id && item.event_historical === historical,
+      )
+    ) {
+      acc.push(x)
+    }
+    return acc
+  }, [])
 
   const eventContainerRef = useRef<FixedSizeList>(null)
   const scrollPrimitiveRef = useRef<HTMLDivElement>(null)
@@ -79,8 +104,11 @@ function MultiEventViewer(props: any) {
       return
     }
     if (
-      // @ts-expect-error - height is a number because we're using a vertical list
-      event.scrollOffset >= ((eventContainerRef.current.props.itemCount * eventContainerRef.current.props.itemSize) - eventContainerRef.current.props.height)
+      event.scrollOffset >=
+      eventContainerRef.current.props.itemCount *
+        eventContainerRef.current.props.itemSize -
+        // @ts-expect-error - height is a number because we're using a vertical list
+        eventContainerRef.current.props.height
     ) {
       setHasScrolled(false)
       return
@@ -101,7 +129,13 @@ function MultiEventViewer(props: any) {
     event.preventDefault()
   }
 
-  const Row = ({ index, style }: { index: number, style: React.CSSProperties }) => {
+  const Row = ({
+    index,
+    style,
+  }: {
+    index: number
+    style: React.CSSProperties
+  }) => {
     const event = filteredEvents[index]
     return (
       <div style={style}>
@@ -111,7 +145,13 @@ function MultiEventViewer(props: any) {
   }
 
   const allEventsFiltered = () => {
-    return !showSelfItems && !showSamePlayerItems && !showOtherItems && !showChat && !showSystem
+    return (
+      !showSelfItems &&
+      !showSamePlayerItems &&
+      !showOtherItems &&
+      !showChat &&
+      !showSystem
+    )
   }
 
   return (
@@ -121,7 +161,10 @@ function MultiEventViewer(props: any) {
           <PopoverTrigger asChild>
             <Button
               size="icon"
-              className={"h-8 w-8 absolute top-3 right-3 opacity-50 z-10" + (allEventsFiltered() ? " bg-red-500" : "")}
+              className={
+                "h-8 w-8 absolute top-3 right-3 opacity-50 z-10" +
+                (allEventsFiltered() ? " bg-red-500" : "")
+              }
             >
               <Settings2Icon />
             </Button>
@@ -211,7 +254,7 @@ function MultiEventViewer(props: any) {
             Scroll to bottom
           </Button>
         )}
-        </div>
+      </div>
       <form
         id="chatBox"
         className="h-8 w-4/5 mt-2 rounded-md flex flex-row"
