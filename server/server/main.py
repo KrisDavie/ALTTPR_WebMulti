@@ -7,7 +7,7 @@ import zlib
 from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
 
-import datetime 
+import datetime
 
 from cryptography.fernet import Fernet
 
@@ -53,7 +53,9 @@ app = FastAPI(
     # openapi_url=None,
 )
 
-app.add_middleware(SessionMiddleware, secret_key=os.environ.get("FASTAPI_SESSION_SECRET"))
+app.add_middleware(
+    SessionMiddleware, secret_key=os.environ.get("FASTAPI_SESSION_SECRET")
+)
 
 logging_config = {
     "version": 1,
@@ -81,13 +83,13 @@ logging.config.dictConfig(logging_config)
 
 oauth = OAuth()
 oauth.register(
-    name='discord',
-    server_metadata_url='https://discord.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'identify email'},
-    client_id=os.environ.get('DISCORD_OAUTH_CLIENT_ID'),
-    client_secret=os.environ.get('DISCORD_OAUTH_CLIENT_SECRET'),
-    api_base_url='https://discord.com/api/v10',
-)    
+    name="discord",
+    server_metadata_url="https://discord.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "identify email"},
+    client_id=os.environ.get("DISCORD_OAUTH_CLIENT_ID"),
+    client_secret=os.environ.get("DISCORD_OAUTH_CLIENT_SECRET"),
+    api_base_url="https://discord.com/api/v10",
+)
 
 # models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
@@ -95,7 +97,10 @@ models.Base.metadata.create_all(bind=engine)
 fernet = Fernet(os.environ.get("FERNET_SECRET"))
 
 ONE_MB = 1024 * 1024
-SESSION_EXPIRE_DAYS = max(2, int(os.environ.get("SESSION_EXPIRE_DAYS", 28))) # Minimum 2 days
+SESSION_EXPIRE_DAYS = max(
+    2, int(os.environ.get("SESSION_EXPIRE_DAYS", 28))
+)  # Minimum 2 days
+
 
 def get_db():
     db = SessionLocal()
@@ -109,15 +114,34 @@ def get_db():
 async def valid_content_length(content_length: int = Header(..., lt=ONE_MB * 10)):
     return content_length
 
+
 def create_guest_user(response: Response, db: Annotated[Session, Depends(get_db)]):
     token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
     user = crud.create_user(db, schemas.UserCreate(session_tokens=[token]))
-    response.set_cookie("session_token", token, expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
-    response.set_cookie("user_id", str(user.id), expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
-    response.set_cookie("user_type", "guest", expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie(
+        "session_token",
+        token,
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
+    response.set_cookie(
+        "user_id",
+        str(user.id),
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
+    response.set_cookie(
+        "user_type",
+        "guest",
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
     return user, token
 
-def verify_session_token(response: Response, request: Request, db: Annotated[Session, Depends(get_db)]):
+
+def verify_session_token(
+    response: Response, request: Request, db: Annotated[Session, Depends(get_db)]
+):
     token = request.cookies.get("session_token")
     user_id = request.cookies.get("user_id")
     if not user_id:
@@ -134,45 +158,71 @@ def verify_session_token(response: Response, request: Request, db: Annotated[Ses
     except:
         response.delete_cookie("session_token")
         raise HTTPException(status_code=401, detail="Invalid session token")
-    if fernet.decrypt(token.encode()) not in [fernet.decrypt(x.encode()) for x in user.session_tokens]:
-    # if fernet.decrypt(user.session_token.encode()) != fernet.decrypt(token.encode()):
+    if fernet.decrypt(token.encode()) not in [
+        fernet.decrypt(x.encode()) for x in user.session_tokens
+    ]:
+        # if fernet.decrypt(user.session_token.encode()) != fernet.decrypt(token.encode()):
         response.delete_cookie("session_token")
         raise HTTPException(status_code=401, detail="Invalid session token")
-    if fernet.extract_timestamp(token.encode()) < (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=SESSION_EXPIRE_DAYS + 1)).timestamp():
+    if (
+        fernet.extract_timestamp(token.encode())
+        < (
+            datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=SESSION_EXPIRE_DAYS + 1)
+        ).timestamp()
+    ):
         return update_session_token(response, db, user.id, token)
     return user, token
 
 
-def update_session_token(response: Response, db: Annotated[Session, Depends(get_db)], user_id: int, old_token: str):
+def update_session_token(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    user_id: int,
+    old_token: str,
+):
     token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
     user = crud.update_user_session_token(db, user_id, token, old_token)
-    response.set_cookie("session_token", token, expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie(
+        "session_token",
+        token,
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
     return user, token
-    
 
-@app.post('/users/auth', response_model=schemas.User)
-def auth_user(response: Response, db: Annotated[Session, Depends(get_db)], user_info: Annotated[dict, Depends(verify_session_token)]):
+
+@app.post("/users/auth", response_model=schemas.User)
+def auth_user(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[dict, Depends(verify_session_token)],
+):
     user, token = user_info
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user
+
 
 @app.get("/users/discord_login")
 async def discord_login(request: Request):
     redirect_uri = request.url_for("discord_auth")
     return await oauth.discord.authorize_redirect(request, redirect_uri)
 
-@app.get('/users/discord_auth', response_class=HTMLResponse)
-async def discord_auth(request: Request, response: Response, db: Annotated[Session, Depends(get_db)]):
+
+@app.get("/users/discord_auth", response_class=HTMLResponse)
+async def discord_auth(
+    request: Request, response: Response, db: Annotated[Session, Depends(get_db)]
+):
     try:
         discord_token = await oauth.discord.authorize_access_token(request)
     except OAuthError as e:
         return e.error
-    resp = await oauth.discord.get('users/@me', token=discord_token)
+    resp = await oauth.discord.get("users/@me", token=discord_token)
 
     discord_user: schemas.DiscordAPIUser = resp.json()
-    discord_user['refresh_token'] = discord_token['refresh_token']
-    
+    discord_user["refresh_token"] = discord_token["refresh_token"]
+
     token = request.cookies.get("session_token")
     user_id = request.cookies.get("user_id")
     user = None
@@ -187,20 +237,35 @@ async def discord_auth(request: Request, response: Response, db: Annotated[Sessi
     # No user set in the browser
     if not user:
         # TODO: This workflow could be better
-        user = crud.get_user_by_email(db, discord_user['email'])
+        user = crud.get_user_by_email(db, discord_user["email"])
     # User hasn't logged in before
     if not user:
         user, token = create_guest_user(response, db)
     # User was a guest previously
-    if user.email != discord_user['email']:
+    if user.email != discord_user["email"]:
         user = crud.update_discord_user(db, user.id, discord_user)
-    
+
     if not token:
         token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
         user = crud.update_user_session_token(db, user.id, token, None)
-    response.set_cookie("user_type", "discord", expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
-    response.set_cookie("user_id", str(user.id), expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
-    response.set_cookie("session_token", token, expires=datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=SESSION_EXPIRE_DAYS))
+    response.set_cookie(
+        "user_type",
+        "discord",
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
+    response.set_cookie(
+        "user_id",
+        str(user.id),
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
+    response.set_cookie(
+        "session_token",
+        token,
+        expires=datetime.datetime.now(datetime.UTC)
+        + datetime.timedelta(days=SESSION_EXPIRE_DAYS),
+    )
     return f"""
     <html>
         <head
@@ -215,9 +280,13 @@ async def discord_auth(request: Request, response: Response, db: Annotated[Sessi
     """
 
 
-
-@app.get('/users/{user_id}', response_model=schemas.User)
-def get_user(response: Response, user_id: int, db: Annotated[Session, Depends(get_db)], user_info: Annotated[dict, Depends(verify_session_token)]):
+@app.get("/users/{user_id}", response_model=schemas.User)
+def get_user(
+    response: Response,
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[dict, Depends(verify_session_token)],
+):
     user, token = user_info
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -227,6 +296,7 @@ def get_user(response: Response, user_id: int, db: Annotated[Session, Depends(ge
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     return user
+
 
 @app.post("/multidata")
 def create_multi_session(
@@ -264,7 +334,7 @@ def create_multi_session(
             mwdata=parsed_data,
             session_password=password if password else None,
         ),
-        user.id
+        user.id,
     )
 
     create_event = crud.create_event(
@@ -306,11 +376,14 @@ def get_session_events(
 
 
 @app.get("/session/{mw_session_id}/players")
-def get_session_players(mw_session_id: str, db: Annotated[Session, Depends(get_db)]) -> list[str]:
+def get_session_players(
+    mw_session_id: str, db: Annotated[Session, Depends(get_db)]
+) -> list[str]:
     session = crud.get_session(db, mw_session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session.mwdata["names"][0]
+
 
 @app.post("/admin/{mw_session_id}/send")
 def admin_send_event(
@@ -426,13 +499,13 @@ async def log_event(
     session = crud.get_session(db, mw_session_id)
     if not session:
         return {"error": "Session not found"}
-    
+
     new_entry = schemas.LogEntryCreate(
         session_id=session.id,
         player_id=send_data["player_id"],
         content=send_data["message"],
     )
-    
+
     log_entry = crud.add_log_entry(db, new_entry)
 
     if not log_entry:
@@ -472,18 +545,18 @@ async def player_forfeit(
             )
     ff_events = [
         schemas.EventCreate(
-                session_id=session.id,
-                event_type=models.EventTypes.new_item,
-                from_player=player_id,
-                to_player=item_info[1],
-                item_id=item_info[0],
-                location=location,
-                event_data={
-                    "reason": "forfeit",
-                    "item_name": loc_data.item_table[str(item_info[0])],
-                    "location_name": loc_data.lookup_id_to_name[str(location)],
-                },
-            )
+            session_id=session.id,
+            event_type=models.EventTypes.new_item,
+            from_player=player_id,
+            to_player=item_info[1],
+            item_id=item_info[0],
+            location=location,
+            event_data={
+                "reason": "forfeit",
+                "item_name": loc_data.item_table[str(item_info[0])],
+                "location_name": loc_data.lookup_id_to_name[str(location)],
+            },
+        )
         for location, item_info in all_player_items.items()
     ]
     response["forfeit_item_count"] = len(ff_events)
@@ -505,6 +578,45 @@ async def player_forfeit(
     response["event_id"] = (new_event.id,)
 
     return response
+
+
+def system_chat(
+    message: str,
+    session: models.MWSession,
+    db: Annotated[Session, Depends(get_db)],
+    type: str = "chat",
+    private: int = -1,
+):
+    return crud.create_event(
+        db,
+        schemas.EventCreate(
+            session_id=session.id,
+            event_type=models.EventTypes.chat,
+            from_player=0,
+            to_player=private,
+            item_id=-1,
+            location=-1,
+            event_data={"message": message, "type": type, "private": False if private == -1 else True},
+        ),
+    )
+
+
+async def countdown(
+    countdown_time: int,
+    session: models.MWSession,
+    db: Annotated[Session, Depends(get_db)],
+):
+    start_time = datetime.datetime.now()
+    for i in range(countdown_time, 0, -1):
+        while True:
+            if datetime.datetime.now() >= start_time + datetime.timedelta(
+                seconds=countdown_time - i
+            ):
+                system_chat(f"{i}", session, db, type="countdown")
+                break
+            else:
+                await sleep(0.010)
+    system_chat("GO!", session, db, type="countdown")
 
 
 @app.websocket("/ws/{mw_session_id}")
@@ -609,18 +721,18 @@ async def websocket_endpoint(
         nonlocal should_close
         nonlocal events_to_send
         nonlocal skip_update
+        nonlocal websocket
 
         if target_event.session_id != session.id:
             return
         elif target_event.event_type == models.EventTypes.player_forfeit:
-            # I don't remember why I did this, but it's probably important	
+            # I don't remember why I did this, but it's probably important
             skip_update = 3
             return
         elif websocket.client_state != WebSocketState.CONNECTED:
             # TODO: Actually handle this
             should_close = True
             return
-
         new_event = {
             "type": target_event.event_type.name,
             "data": {
@@ -643,10 +755,19 @@ async def websocket_endpoint(
             target_event.event_data["location_name"] = loc_data.lookup_id_to_name[
                 str(target_event.location)
             ]
-            if target_event.to_player != target_event.from_player: 
+            if target_event.to_player != target_event.from_player:
                 new_event["data"]["event_idx"] = list(
                     target_event.to_player_idx.to_bytes(2, "big")
                 )
+        if target_event.event_type == models.EventTypes.chat:
+            if target_event.event_data["type"] == "countdown":
+                loop = asyncio.get_event_loop()
+                logger.debug(f"Countdown: {datetime.datetime.now()}")
+                loop.create_task(websocket.send_json(new_event))
+                return
+            if target_event.to_player != -1:
+                if target_event.to_player != player_id:
+                    return
 
         events_to_send.append(new_event)
 
@@ -658,7 +779,7 @@ async def websocket_endpoint(
 
     try:
         while True:
-            if (len(events_to_send) > 0):
+            if len(events_to_send) > 0:
                 new_items = [x for x in events_to_send if x["type"] == "new_item"]
                 events_to_send = [x for x in events_to_send if x["type"] != "new_item"]
                 if len(new_items) > 0:
@@ -745,18 +866,28 @@ async def websocket_endpoint(
                 logger.debug(f"{player_name} - Sending {len(events_to_send)} events")
 
                 # Get all item events
-                item_event_lists = [event for event in events_to_send if event["type"] == "new_items"]
+                item_event_lists = [
+                    event for event in events_to_send if event["type"] == "new_items"
+                ]
 
                 # Flatten the list of lists
-                all_items = [item_event for item_event_list in item_event_lists for item_event in item_event_list['data']]
+                all_items = [
+                    item_event
+                    for item_event_list in item_event_lists
+                    for item_event in item_event_list["data"]
+                ]
 
                 # filter all_items to remove duplicates where event.id is identical
-                all_items = list({event['id']:event for event in all_items}.values())
+                all_items = list({event["id"]: event for event in all_items}.values())
 
                 logger.debug(f"{player_name} - {len(all_items)} - {all_items}")
-                logger.debug(f"{player_name} - {len(events_to_send)} - {events_to_send}")
+                logger.debug(
+                    f"{player_name} - {len(events_to_send)} - {events_to_send}"
+                )
 
-                non_item_events = [event for event in events_to_send if event["type"] != "new_items"]   
+                non_item_events = [
+                    event for event in events_to_send if event["type"] != "new_items"
+                ]
 
                 events_to_send = non_item_events
                 if len(all_items) > 0:
@@ -809,7 +940,7 @@ async def websocket_endpoint(
                 )
                 continue
             elif payload["type"] == "chat":
-                crud.create_event(
+                ev = crud.create_event(
                     db,
                     schemas.EventCreate(
                         session_id=session.id,
@@ -818,10 +949,40 @@ async def websocket_endpoint(
                         to_player=-1,
                         item_id=-1,
                         location=-1,
-                        event_data={"message": payload["data"]},
+                        event_data={"message": payload["data"], "type": "chat"},
                     ),
                 )
-                continue
+                # Check for commands
+                if payload["data"].startswith("/"):
+                    command = payload["data"].split(" ")
+                    if command[0] == "/countdown":
+                        if len(command) < 2:
+                            countdown_time = 5
+                        else:
+                            try:
+                                countdown_time = int(command[1])
+                                if countdown_time > 60:
+                                    system_chat(
+                                        "Time too high, max is 60 seconds",
+                                        session,
+                                        db,
+                                        private=player_id,
+                                    )
+                                    continue
+                            except ValueError:
+                                system_chat(
+                                    "Invalid time value.",
+                                    session,
+                                    db,
+                                    private=player_id,
+                                )
+                                continue
+                        loop = asyncio.get_event_loop()
+                        loop.create_task(countdown(countdown_time, session, db))
+                    else:
+                        await websocket.send_json(
+                            {"type": "chat", "data": "Unknown command"}
+                        )
             elif payload["type"] == "update_memory":
                 # Update the memory for the session
                 if processing_sram:
@@ -833,7 +994,7 @@ async def websocket_endpoint(
                     logger.debug(f"Skipping update for {player_name}")
                     skip_update -= 1
                     processing_sram = False
-                    continue 
+                    continue
 
                 sramstore = schemas.SRAMStoreCreate(
                     session_id=session.id,
