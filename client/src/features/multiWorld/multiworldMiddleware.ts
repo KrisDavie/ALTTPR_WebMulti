@@ -141,7 +141,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             break
 
           case "new_items":
-            api.dispatch(log(`Received ${data.data.length} new items`))
+            // api.dispatch(log(`Received ${data.data.length} new items`))
             const sorted_data = data.data
               .filter(
                 (item: any) => item.event_idx && item.event_idx.length == 2,
@@ -163,14 +163,14 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
                 item.from_player != currentState.multiworld.player_id &&
                 item.to_player == currentState.multiworld.player_id,
             )
-            api.dispatch(log(`Items:`))
-            self_data.map((item: any) =>
-              api.dispatch(
-                log(
-                  `IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`,
-                ),
-              ),
-            )
+            // api.dispatch(log(`Items:`))
+            // self_data.map((item: any) =>
+            //   api.dispatch(
+            //     log(
+            //       `IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`,
+            //     ),
+            //   ),
+            // )
             if (self_data.length > 0) {
               api.dispatch(
                 addItemsToQueue(

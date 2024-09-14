@@ -607,11 +607,13 @@ async def countdown(
     db: Annotated[Session, Depends(get_db)],
 ):
     start_time = datetime.datetime.now()
-    for i in range(countdown_time, 0, -1):
+    for i in range(countdown_time, -1, -1):
         while True:
             if datetime.datetime.now() >= start_time + datetime.timedelta(
                 seconds=countdown_time - i
             ):
+                if i <= 0:
+                    break
                 system_chat(f"{i}", session, db, type="countdown")
                 break
             else:

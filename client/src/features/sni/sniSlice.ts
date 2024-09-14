@@ -36,8 +36,7 @@ export const sniSlice = createSlice({
           a.event_idx[1]) -
           (b.event_idx[0] * 256 + b.event_idx[1]),
       ).reduce((acc: any[], x: any) => {
-        const key = x.id
-        if (!acc.some((item: any) => item.id === key)) {
+        if (!acc.some((item: any) => item.id === x.id)) {
           acc.push(x)
         }
         return acc

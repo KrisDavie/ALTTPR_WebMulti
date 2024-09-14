@@ -6,6 +6,7 @@ import { useSendForfeitMutation } from "../api/apiSlice"
 import ItemSend from "./itemSend"
 import { Button } from "@/components/ui/button"
 import { useEffect } from "react"
+import PauseReceivingPanel from "./PauseReceivingPanel"
 
 export function loader({ params }: { params: Params }) {
   return { sessionId: params.sessionId }
@@ -52,8 +53,7 @@ function MultiView(props: any) {
           className="w-32 mt-2"
           onClick={() => receiving_paused ? dispatch(resumeReceiving()) : dispatch(pauseReceiving())}
         >
-          {receiving_paused ? "Resume Receiving" : "Pause Receiving"}
-        </Button>
+        <PauseReceivingPanel />
         </div>
 
       {adminMode && <ItemSend sessionId={sessionId} />}

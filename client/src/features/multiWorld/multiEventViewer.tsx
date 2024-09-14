@@ -91,11 +91,13 @@ function MultiEventViewer(props: any) {
   }, [])
 
   const eventContainerRef = useRef<FixedSizeList>(null)
-  const scrollPrimitiveRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (eventContainerRef.current && !hasScrolled) {
-      eventContainerRef.current.scrollToItem(filteredEvents.length - 1)
+      eventContainerRef.current.scrollTo(
+        eventContainerRef.current.props.itemCount *
+        eventContainerRef.current.props.itemSize
+      )
     }
   }, [multiworldEvents])
 
@@ -105,10 +107,10 @@ function MultiEventViewer(props: any) {
     }
     if (
       event.scrollOffset >=
-      eventContainerRef.current.props.itemCount *
+      (eventContainerRef.current.props.itemCount - 3) *
         eventContainerRef.current.props.itemSize -
         // @ts-expect-error - height is a number because we're using a vertical list
-        eventContainerRef.current.props.height
+        eventContainerRef.current.props.height 
     ) {
       setHasScrolled(false)
       return
@@ -118,7 +120,10 @@ function MultiEventViewer(props: any) {
 
   const handleScrollToBottom = () => {
     if (eventContainerRef.current) {
-      eventContainerRef.current.scrollToItem(filteredEvents.length - 1)
+      eventContainerRef.current.scrollTo(
+        eventContainerRef.current.props.itemCount *
+        eventContainerRef.current.props.itemSize
+      )
       setHasScrolled(false)
     }
   }
@@ -137,6 +142,7 @@ function MultiEventViewer(props: any) {
     style: React.CSSProperties
   }) => {
     const event = filteredEvents[index]
+    style = {...style, 'overflowX': 'hidden'}
     return (
       <div style={style}>
         <MultiEventText key={event.id} event={event} players={players} />
