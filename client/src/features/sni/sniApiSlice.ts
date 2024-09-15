@@ -16,6 +16,7 @@ import {
   resumeReceiving,
 } from "../multiWorld/multiworldSlice"
 import { log } from "../loggerSlice"
+import type { AppDispatch } from "@/app/store"
 
 const getTransport = (state: any) => {
   return new GrpcWebFetchTransport({
@@ -49,6 +50,17 @@ const sram_locs: SRAMLocs = {
   0xf66268: ["sprites", 0x250],
   0xf664b8: ["shops", 0x29],
   0xf5f472: ["prizes", 0x2]
+}
+
+let receiving_lock = false
+
+const updateReceiving = (dispatch: AppDispatch, receiving_state: boolean) => {
+  dispatch(setReceiving(receiving_state))
+  receiving_lock = receiving_state
+}
+
+const getReceiveState = (state: RootState) => {
+  return state.multiworld.receiving || receiving_lock
 }
 
 export const sniApiSlice = createApi({
@@ -105,16 +117,16 @@ export const sniApiSlice = createApi({
         if (curQueue.length === 0) {
           return { error: "No items to send" }
         }
-        if (state.multiworld.receiving) {
+        if (getReceiveState(state)) {
           return { error: "Already receiving" }
         }
-        queryApi.dispatch(setReceiving(true))
+        updateReceiving(queryApi.dispatch, true)
 
         const transport = getTransport(state)
         let controlMem = new DeviceMemoryClient(transport)
         let connectedDevice = state.sni.connectedDevice
         if (!connectedDevice) {
-          queryApi.dispatch(setReceiving(false))
+          updateReceiving(queryApi.dispatch, false)
           return { error: "No device or memory data" }
         }
 
@@ -123,7 +135,7 @@ export const sniApiSlice = createApi({
         let game_mode = 0x00
 
         // @ts-ignore
-        while (!state.multiworld.receiving || !ingame_modes.includes(game_mode)) {
+        while (!getReceiveState(state) || !ingame_modes.includes(game_mode)) {
           const game_mode_response = await controlMem.singleRead({
             uri: connectedDevice,
             request: {
@@ -134,7 +146,7 @@ export const sniApiSlice = createApi({
             },
           })
           if (!game_mode_response.response.response) {
-            queryApi.dispatch(setReceiving(false))
+            updateReceiving(queryApi.dispatch, false)
             return { error: "Error reading memory, no reposonse" }
           }
           game_mode = game_mode_response.response.response.data[0]
@@ -218,7 +230,7 @@ export const sniApiSlice = createApi({
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state
         await new Promise(r => setTimeout(r, 1000))
-        queryApi.dispatch(setReceiving(false))
+        updateReceiving(queryApi.dispatch, false)
         queryApi.dispatch(log(`Completed sending items`))
         return { data: writeResponse?.response.response?.requestAddress }
       },

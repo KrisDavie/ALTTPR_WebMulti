@@ -6,7 +6,6 @@ import {
   sendChatMessage,
   setInitComplete,
   setPlayerInfo,
-  setReceiving,
   pauseReceiving,
   resumeReceiving,
   setSramUpdatingOnServer,
