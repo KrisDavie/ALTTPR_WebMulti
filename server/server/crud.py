@@ -159,6 +159,44 @@ def get_events_for_player(
         .all()
     )
 
+def get_events_after_frametime(
+    db: Session, session_id: str, player_id: int, frame_time: int, skip: int = 0, limit: int = 0
+) -> list[models.Event]:
+    if limit <= 0:
+        return (
+            db.query(models.Event)
+            .filter(models.Event.session_id == session_id)
+            .filter(models.Event.from_player == player_id)
+            .filter(models.Event.frame_time >= frame_time)
+            .offset(skip)
+            .all()
+        )
+    return (
+        db.query(models.Event)
+        .filter(models.Event.session_id == session_id)
+        .filter(models.Event.from_player == player_id)
+        .filter(models.Event.frame_time >= frame_time)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+def update_events_frametime(
+    db: Session, session_id: str, player_id: int, events: list[schemas.EventCreate], frame_time: int
+):
+    for event in events:
+        db_event = (
+            db.query(models.Event)
+            .filter(models.Event.session_id == session_id)
+            .filter(models.Event.from_player == player_id)
+            .filter(models.Event.id == event.id)
+            .first()
+        )
+        db_event.frame_time = frame_time
+    db.commit()
+    return True
+
+
 def get_items_for_player_from_others(
     db: Session, session_id: str, player_id: int, gt_idx: int = 0, skip: int = 0, limit: int = 0
 ) -> list[models.Event]:

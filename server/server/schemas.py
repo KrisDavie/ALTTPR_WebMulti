@@ -100,6 +100,7 @@ class EventBase(BaseModel):
     to_player_idx: int | None = None
     item_id: int
     location: int
+    frame_time: int | None = None
 
 
 class EventCreate(EventBase):

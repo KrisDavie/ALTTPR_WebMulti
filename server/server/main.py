@@ -1,5 +1,6 @@
 from asyncio import sleep
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import os
 import secrets
@@ -35,22 +36,37 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import event as listen_event
 
+from alembic.config import Config
+from alembic import command
+
 from . import crud, models, schemas
 from .database import SessionLocal, engine
 
-# from .data.locs import location_table_uw_by_room, multi_location_table
 from .data import data as loc_data
 from . import sram
 import time
+
+def run_migrations():
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
+
+@asynccontextmanager
+async def lifespan(app_: FastAPI):
+    logger.info("Starting up...")
+    logger.info("run alembic upgrade head...")
+    run_migrations()
+    yield
+    logger.info("Shutting down...")
+
+
 
 app = FastAPI(
     title="ALTTPR Multiworld Server",
     description="A server for ALTTPR Multiworld",
     version="0.1.0",
     root_path="/api/v1",
-    # docs_url=None,
-    # redoc_url=None,
-    # openapi_url=None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -91,8 +107,6 @@ oauth.register(
     api_base_url="https://discord.com/api/v10",
 )
 
-# models.Base.metadata.drop_all(bind=engine)
-models.Base.metadata.create_all(bind=engine)
 
 fernet = Fernet(os.environ.get("FERNET_SECRET"))
 
@@ -435,59 +449,6 @@ def admin_send_event(
     return new_event
 
 
-@app.post("/session/{mw_session_id}/debug/{num_items}")
-async def debug_session(
-    mw_session_id: str,
-    num_items: int,
-    db: Annotated[Session, Depends(get_db)],
-) -> dict:
-    session = crud.get_session(db, mw_session_id)
-    if not session:
-        return {"error": "Session not found"}
-    multidata = session.mwdata
-    items_to_send = num_items
-    for player_id, name in enumerate(multidata["names"][0]):
-        player_id += 1
-        print(f"DEBUGGING: Player {player_id} - {name}")
-        all_player_items = [
-            x for x in session.mwdata["locations"] if x[0][1] == player_id
-        ]
-        all_player_items = {x[0][0]: x[1] for x in all_player_items}
-        player_events = crud.get_events_for_player(db, session.id, player_id)
-        player_events = [
-            x for x in player_events if x.event_type == models.EventTypes.new_item
-        ]
-        player_items = set([f"{x.item_id}__{x.location}" for x in player_events])
-        for location, item_info in all_player_items.items():
-            if item_info[1] != player_id:
-                continue
-            if f"{item_info[0]}__{location}" in player_items:
-                continue
-            crud.create_event(
-                db,
-                schemas.EventCreate(
-                    session_id=session.id,
-                    event_type=models.EventTypes.new_item,
-                    from_player=0,
-                    to_player=item_info[1],
-                    item_id=item_info[0],
-                    location=location,
-                    event_data={
-                        "reason": "forfeit",
-                        "item_name": loc_data.item_table[str(item_info[0])],
-                        "location_name": loc_data.lookup_id_to_name[str(location)],
-                    },
-                ),
-            )
-            print(
-                f"DEBUGGING: Player {player_id} - Sending item {loc_data.item_table[str(item_info[0])]} to player {item_info[1]}"
-            )
-            items_to_send -= 1
-            # await sleep(.2)
-            if items_to_send == 0:
-                items_to_send = num_items
-                break
-    return {"items_sent": num_items}
 
 
 @app.post("/session/{mw_session_id}/log")
@@ -774,11 +735,11 @@ async def websocket_endpoint(
 
         events_to_send.append(new_event)
 
-    checked_locations = set()
+    checked_locations = {}
 
     for p_event in crud.get_events_from_player(db, session.id, player_id):
         if p_event.event_type == models.EventTypes.new_item:
-            checked_locations.add(p_event.location)
+            checked_locations[p_event.location] = p_event.frame_time
 
     try:
         while True:
@@ -992,7 +953,7 @@ async def websocket_endpoint(
                     continue
                 processing_sram = True
 
-                logger.debug(f"Got SRAM update from {player_name}")
+                # logger.debug(f"Got SRAM update from {player_name}")
                 if skip_update > 0:
                     logger.debug(f"Skipping update for {player_name}")
                     skip_update -= 1
@@ -1017,7 +978,19 @@ async def websocket_endpoint(
                     processing_sram = False
                     continue
 
-                locations = sram.get_changed_locations(sram_diff, new_sram)
+                locations = sram.get_changed_locations(sram_diff, old_sram, new_sram)
+                frame_time = new_sram["total_time"][2] << 16 | new_sram["total_time"][1] << 8 | new_sram["total_time"][0]
+                old_frame_time = old_sram["total_time"][2] << 16 | old_sram["total_time"][1] << 8 | old_sram["total_time"][0]
+
+                if frame_time < old_frame_time:
+                    logger.debug(f"{player_name} - Frame time went backwards - Save scum or reset")
+                    events_to_update = crud.get_events_after_frametime(
+                        db, session.id, player_id, frame_time
+                    )
+                    crud.update_events_frametime(db, session.id, player_id, events_to_update, None)
+                    for event in events_to_update:
+                        checked_locations[event.location] = None
+
 
                 for location in locations:
                     loc_id = int(loc_data.lookup_name_to_id[location])
@@ -1029,7 +1002,7 @@ async def websocket_endpoint(
                         continue
                     item_id, item_player = multidata_locs[(loc_id, player_id)]
 
-                    if loc_id not in checked_locations:
+                    if loc_id not in checked_locations or (checked_locations[loc_id] != None and checked_locations[loc_id] < frame_time):
                         logger.info(
                             f"{player_name} - New Location Checked: {location} [{loc_id}]"
                         )
@@ -1043,13 +1016,14 @@ async def websocket_endpoint(
                                 to_player=item_player,
                                 item_id=item_id,
                                 location=loc_id,
+                                frame_time=frame_time,
                                 event_data={
                                     "item_name": loc_data.item_table[str(item_id)],
                                     "location_name": location,
                                 },
                             ),
                         )
-                        checked_locations.add(loc_id)
+                        checked_locations[loc_id] = frame_time
 
                 # Compare all events for the player with their sram to see if they need to be sent any items (save scummed)
                 last_event = int.from_bytes(new_sram["multiinfo"][:2], "big")
@@ -1088,7 +1062,7 @@ async def websocket_endpoint(
                     )
                     last_event = event.id
 
-                logger.debug(f"{player_name} - Finished processing sram update")
+                # logger.debug(f"{player_name} - Finished processing sram update")
                 processing_sram = False
                 continue
             else:

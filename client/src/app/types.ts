@@ -4,6 +4,7 @@ export interface Event {
   event_type: EventTypes | string
   from_player: number
   to_player: number
+  frame_time?: number
   event_data?: object
   session_id?: string
   event_historical?: boolean

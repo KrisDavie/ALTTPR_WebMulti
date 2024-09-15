@@ -8,18 +8,25 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    command: ["sh", "-c", "cd /app && /app/.venv/bin/uvicorn --proxy-headers --forwarded-allow-ips=* --reload --host 0.0.0.0 server.main:app"]
+    command: [ "sh", "-c", "cd /app && /app/.venv/bin/uvicorn --proxy-headers --forwarded-allow-ips=* --reload --host 0.0.0.0 server.main:app" ]
     ports:
       - 8000:8000
       - 5678:5678
     volumes:
       - ./data:/data
       - ./server/server:/app/server
+      - ./server/alembic:/app/alembic
     env_file: ./server/.env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
   db:
     image: postgres:latest
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres

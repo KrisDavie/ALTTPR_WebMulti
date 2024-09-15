@@ -3,6 +3,7 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Integer,
+    BigInteger,
     String,
     ARRAY,
     Enum,
@@ -130,6 +131,7 @@ class Event(Base):
     item_id = Column(Integer, index=True)
     location = Column(Integer, index=True)
     event_type = Column(Enum(EventTypes), index=True)
+    frame_time = Column(BigInteger, index=True, nullable=True)
     event_data = Column(JSON)
 
     session = relationship("MWSession", back_populates="events")
@@ -144,8 +146,8 @@ class SRAMStore(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now())
     session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
     player = Column(Integer, index=True)
-    sram = Column(JSON(Integer))
-    prev_sram = Column(JSON(Integer), nullable=True)
+    sram = Column(JSON())
+    prev_sram = Column(JSON(), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"))
 
     session = relationship("MWSession", back_populates="sramstores")

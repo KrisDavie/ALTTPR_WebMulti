@@ -49,10 +49,6 @@ function MultiView(props: any) {
           {hasForfeited() ?  "Already Forfeit" : "Forfeit"}
         </Button>
 
-        <Button
-          className="w-32 mt-2"
-          onClick={() => receiving_paused ? dispatch(resumeReceiving()) : dispatch(pauseReceiving())}
-        >
         <PauseReceivingPanel />
         </div>
 
