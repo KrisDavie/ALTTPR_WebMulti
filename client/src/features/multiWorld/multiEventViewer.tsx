@@ -94,10 +94,8 @@ function MultiEventViewer(props: any) {
 
   useEffect(() => {
     if (eventContainerRef.current && !hasScrolled) {
-      eventContainerRef.current.scrollTo(
-        eventContainerRef.current.props.itemCount *
-        eventContainerRef.current.props.itemSize
-      )
+      eventContainerRef.current.scrollToItem(
+        eventContainerRef.current.props.itemCount + 1, 'end')
     }
   }, [multiworldEvents])
 
@@ -120,10 +118,8 @@ function MultiEventViewer(props: any) {
 
   const handleScrollToBottom = () => {
     if (eventContainerRef.current) {
-      eventContainerRef.current.scrollTo(
-        eventContainerRef.current.props.itemCount *
-        eventContainerRef.current.props.itemSize
-      )
+      eventContainerRef.current.scrollToItem(
+        eventContainerRef.current.props.itemCount + 1, 'end')
       setHasScrolled(false)
     }
   }
@@ -142,7 +138,7 @@ function MultiEventViewer(props: any) {
     style: React.CSSProperties
   }) => {
     const event = filteredEvents[index]
-    style = {...style, 'overflowX': 'hidden'}
+    style = {...style, 'overflowX': 'hidden', 'overflowY': 'hidden'}
     return (
       <div style={style}>
         <MultiEventText key={event.id} event={event} players={players} />

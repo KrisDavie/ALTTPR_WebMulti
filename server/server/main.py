@@ -606,6 +606,7 @@ async def countdown(
     session: models.MWSession,
     db: Annotated[Session, Depends(get_db)],
 ):
+    await sleep(0.5)
     start_time = datetime.datetime.now()
     for i in range(countdown_time, -1, -1):
         while True:
