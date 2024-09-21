@@ -76,9 +76,7 @@ def get_changed_locations(sram_diff: dict, old_sram: dict, new_sram: dict) -> li
             elif loc_group == "misc":
                 misc_data = new_sram[loc_group][mem_loc]
                 old_misc_data = old_sram[loc_group][mem_loc]
-                for name, mask in loc_data.location_info_by_room[loc_group][
-                    mem_loc + 0x3C6
-                ]:
+                for name, mask in loc_data.location_info_by_room[loc_group][mem_loc]:
                     if ((misc_data & mask) != (old_misc_data & mask)) and (
                         misc_data & mask
                     ) != 0:

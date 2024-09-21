@@ -15,7 +15,7 @@ location_info_reversed = defaultdict(dict)
 location_info_by_ow_screen = defaultdict(lambda: defaultdict(list))
 
 for kind, kind_data in location_info.items():
-    if kind in ["base", "pots", "sprites"]:
+    if kind in ["base", "pots", "sprites", "misc"]:
         for name, (room, mask) in kind_data.items():
             location_info_by_room[kind][room].append((name, mask))
     elif kind in ["overworld", "npcs", "shops"]:
