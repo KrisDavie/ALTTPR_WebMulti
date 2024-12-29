@@ -178,7 +178,7 @@ function MultiEventText(props: MultiEventTextProps) {
   }
 
   return (
-    <div className="h-6" key={key}>
+    <div key={key}>
       {final_content}
     </div>
   )

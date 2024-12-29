@@ -1,7 +1,7 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { useGetSessionEventsQuery, useGetPlayersQuery } from "../api/apiSlice"
 import MultiEventText from "./MultiEventText"
-import { FormEvent, useEffect, useRef, useState } from "react"
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { sendChatMessage } from "./multiworldSlice"
@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/popover"
 import { Settings2Icon } from "lucide-react"
 import { Label } from "@/components/ui/label"
-import { FixedSizeList, FixedSizeList as List } from "react-window"
 import { Event } from "@/app/types"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface MultiEventViewerProps {
   sessionId: string
@@ -29,8 +29,8 @@ function MultiEventViewer(props: MultiEventViewerProps) {
   const dispatch = useAppDispatch()
   const [hasScrolled, setHasScrolled] = useState(false)
   const [chatMessage, setChatMessage] = useState("")
+  const [showSelfItems, setShowSelfItems] = useState(true)  
   const initComplete = useAppSelector(state => state.multiworld.init_complete)
-  const [showSelfItems, setShowSelfItems] = useState(true)
   const [showSamePlayerItems, setShowSamePlayerItems] = useState(false)
   const [showOtherItems, setShowOtherItems] = useState(true)
   const [showChat, setShowChat] = useState(true)
@@ -94,26 +94,19 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     return acc
   }, [])
 
-  const eventContainerRef = useRef<FixedSizeList>(null)
+  const eventContainerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (eventContainerRef.current && !hasScrolled) {
-      eventContainerRef.current.scrollToItem(
-        eventContainerRef.current.props.itemCount + 1, 'end')
+      eventContainerRef.current.scrollTo(0, eventContainerRef.current.scrollHeight)
     }
   }, [multiworldEvents, hasScrolled])
 
-  const handleOnScroll = (event: React.UIEvent<HTMLElement>) => {
+  const handleOnScroll = () => {
     if (!eventContainerRef.current) {
       return
     }
-    if (
-      event.scrollOffset >=
-      (eventContainerRef.current.props.itemCount - 3) *
-        eventContainerRef.current.props.itemSize -
-        // @ts-expect-error - height is a number because we're using a vertical list
-        eventContainerRef.current.props.height 
-    ) {
+    if (eventContainerRef.current.clientHeight + eventContainerRef.current.scrollTop >= eventContainerRef.current.scrollHeight) {
       setHasScrolled(false)
       return
     }
@@ -122,8 +115,7 @@ function MultiEventViewer(props: MultiEventViewerProps) {
 
   const handleScrollToBottom = () => {
     if (eventContainerRef.current) {
-      eventContainerRef.current.scrollToItem(
-        eventContainerRef.current.props.itemCount + 1, 'end')
+      eventContainerRef.current.scrollTo(0, eventContainerRef.current.scrollHeight)
       setHasScrolled(false)
     }
   }
@@ -132,22 +124,6 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     dispatch(sendChatMessage({ message: chatMessage }))
     setChatMessage("")
     event.preventDefault()
-  }
-
-  const Row = ({
-    index,
-    style,
-  }: {
-    index: number
-    style: React.CSSProperties
-  }) => {
-    const event = filteredEvents[index]
-    style = {...style, 'overflowX': 'hidden', 'overflowY': 'hidden'}
-    return (
-      <div style={style}>
-        <MultiEventText key={event.id} event={event} players={players} />
-      </div>
-    )
   }
 
   const allEventsFiltered = () => {
@@ -159,6 +135,12 @@ function MultiEventViewer(props: MultiEventViewerProps) {
       !showSystem
     )
   }
+
+  const renderEvents = useCallback((event: Event) => (
+    <MultiEventText key={event.id} event={event} players={players} />
+  ), [players])
+
+  const renderedEvents = filteredEvents.map(renderEvents)
 
   return (
     <div className="flex flex-col max-w-6xl mt-2">
@@ -241,17 +223,11 @@ function MultiEventViewer(props: MultiEventViewerProps) {
         {isLoading || playersLoading || !multiworldEvents ? (
           <div>Loading... ({isLoading})</div>
         ) : (
-          <List
-            height={288} // height of the ScrollArea
-            itemCount={filteredEvents.length}
-            itemSize={24} // height of each item
-            width="100%"
-            onScroll={handleOnScroll}
-            ref={eventContainerRef}
-          >
-            {Row}
-          </List>
-        )}
+          <ScrollArea onScroll={handleOnScroll} scrollPrimitiveRef={eventContainerRef} className="h-full w-full">
+            {renderedEvents}
+          </ScrollArea>
+            )
+        }
         {hasScrolled && (
           <Button
             className="flex flex-col items-center space-y-4 text-sm absolute bottom-3 right-3 z-10 h-8 opacity-60"
