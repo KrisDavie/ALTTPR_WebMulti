@@ -1,6 +1,12 @@
+import { Event } from "@/app/types"
 import { JSX } from "react"
 
-function MultiEventText(props: any) {
+interface MultiEventTextProps {
+  event: Event
+  players: string[]
+}
+
+function MultiEventText(props: MultiEventTextProps) {
   const { event, players } = props
 
   const { from_player, to_player, timestamp, event_data } = event

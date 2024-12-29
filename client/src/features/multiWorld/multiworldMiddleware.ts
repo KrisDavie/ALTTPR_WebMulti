@@ -16,6 +16,7 @@ import { log } from "../loggerSlice"
 
 import type { RootState } from "@/app/store"
 import { addItemsToQueue } from "../sni/sniSlice"
+import { Event } from "@/app/types"
 
 const types_to_adjust = [
   "new_items",
@@ -25,7 +26,7 @@ const types_to_adjust = [
   "player_leave",
 ]
 
-export const multiworldMiddleware: Middleware<{}, RootState> = api => {
+export const multiworldMiddleware: Middleware<object, RootState> = api => {
   let socket: WebSocket | undefined
   return next => action => {
     if (!isAction(action)) {
@@ -139,26 +140,25 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             )
             break
 
-          case "new_items":
-            // api.dispatch(log(`Received ${data.data.length} new items`))
+          case "new_items": {
             const sorted_data = data.data
               .filter(
-                (item: any) => item.event_idx && item.event_idx.length == 2,
+                (item: Event) => item.event_idx && item.event_idx.length == 2,
               )
               .sort(
-                (a: any, b: any) =>
+                (a: Event, b: Event) =>
                   a.event_idx[0] * 256 +
                   a.event_idx[1] -
                   (b.event_idx[0] * 256 + b.event_idx[1]),
               )
 
-            sorted_data.forEach((item: any) => {
+            sorted_data.forEach((item: Event) => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
 
             const self_data = sorted_data.filter(
-              (item: any) =>
+              (item: Event) =>
                 item.from_player != currentState.multiworld.player_id &&
                 item.to_player == currentState.multiworld.player_id,
             )
@@ -174,7 +174,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
               api.dispatch(
                 addItemsToQueue(
                   self_data.filter(
-                    (item: any) =>
+                    (item: Event) =>
                       item.from_player != currentState.multiworld.player_id &&
                       item.to_player == currentState.multiworld.player_id,
                   ),
@@ -183,6 +183,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
             }
 
             break
+          }
           case "player_pause_receive":
             api.dispatch(
               addEvent({
@@ -194,7 +195,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
                 id: nanoid(),
               }),
             )
-            break;
+            break
           case "player_resume_receive":
             api.dispatch(
               addEvent({
@@ -206,7 +207,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
                 id: nanoid(),
               }),
             )
-            break;
+            break
           default:
             console.log("Unknown event type: " + data.type)
             break

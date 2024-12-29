@@ -17,7 +17,11 @@ import { useAppDispatch } from "@/app/hooks"
 import { useNavigate } from "react-router-dom"
 import { log } from "../loggerSlice"
 
-function MultiClientForm(props: any) {
+interface MultiClientFormProps {
+  setSelectedMode: (mode: string) => void
+}
+
+function MultiClientForm(props: MultiClientFormProps) {
   const { setSelectedMode } = props
   const dispatch = useAppDispatch()
   const navigate = useNavigate()

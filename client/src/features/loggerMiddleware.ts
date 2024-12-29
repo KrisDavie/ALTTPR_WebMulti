@@ -4,7 +4,7 @@ import { log } from "./loggerSlice"
 
 import type { RootState } from "@/app/store"
 
-export const loggerMiddleware: Middleware<{}, RootState> = api => {
+export const loggerMiddleware: Middleware<object, RootState> = api => {
   return next => action => {
     if (!isAction(action)) {
       return next(action)
@@ -17,10 +17,8 @@ export const loggerMiddleware: Middleware<{}, RootState> = api => {
         return next(action)
       }
       api.dispatch(
-        // @ts-expect-error
         apiSlice.endpoints.sendLogMessage.initiate({
           sessionId: originalState.multiworld.sessionId,
-          // user_id: originalState.user.id,
           player_id: originalState.multiworld.player_id,
           message: `[${new Date().toLocaleString()}] ${action.payload}`,
         }),

@@ -1,5 +1,4 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useGetSessionEventsQuery, useGetPlayersQuery } from "../api/apiSlice"
 import MultiEventText from "./MultiEventText"
 import { FormEvent, useEffect, useRef, useState } from "react"
@@ -14,8 +13,13 @@ import {
 import { Settings2Icon } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { FixedSizeList, FixedSizeList as List } from "react-window"
+import { Event } from "@/app/types"
 
-function MultiEventViewer(props: any) {
+interface MultiEventViewerProps {
+  sessionId: string
+}
+
+function MultiEventViewer(props: MultiEventViewerProps) {
   const { sessionId } = props
   const { isLoading } = useGetSessionEventsQuery(sessionId)
   const { isLoading: playersLoading, data: players } =
@@ -34,7 +38,7 @@ function MultiEventViewer(props: any) {
 
   function getFilteredEvents() {
     const sorted_events = multiworldEvents
-      .filter((x: any) => x.timestamp)
+      .filter((x: Event) => x.timestamp)
       .sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
@@ -77,12 +81,12 @@ function MultiEventViewer(props: any) {
 
   let filteredEvents = getFilteredEvents()
 
-  filteredEvents = filteredEvents.reduce((acc: any[], x: any) => {
+  filteredEvents = filteredEvents.reduce((acc: Event[], x: Event) => {
     const id = x.id
     const historical = x.event_historical
     if (
       !acc.some(
-        (item: any) => item.id === id && item.event_historical === historical,
+        (item: Event) => item.id === id && item.event_historical === historical,
       )
     ) {
       acc.push(x)
@@ -97,9 +101,9 @@ function MultiEventViewer(props: any) {
       eventContainerRef.current.scrollToItem(
         eventContainerRef.current.props.itemCount + 1, 'end')
     }
-  }, [multiworldEvents])
+  }, [multiworldEvents, hasScrolled])
 
-  const handleOnScroll = (event: any) => {
+  const handleOnScroll = (event: React.UIEvent<HTMLElement>) => {
     if (!eventContainerRef.current) {
       return
     }

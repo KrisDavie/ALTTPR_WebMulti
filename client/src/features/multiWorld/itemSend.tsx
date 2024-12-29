@@ -11,13 +11,11 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form"
 import * as z from "zod"
 
 import { cn } from "@/lib/utils"
 
-import { useAppDispatch } from "@/app/hooks"
 import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
 import {
   Popover,
@@ -43,10 +41,14 @@ interface IItems {
 
 const items: IItems = _items
 
-function ItemSend(props: any) {
+interface ItemSendProps {
+  sessionId: string
+}
+
+function ItemSend(props: ItemSendProps) {
   const { sessionId } = props
-  const [sendItems, sendItemsResult] = useSendNewItemsMutation()
-  const { isLoading, isError, data: players } = useGetPlayersQuery(sessionId)
+  const [sendItems] = useSendNewItemsMutation()
+  const { isLoading, data: players } = useGetPlayersQuery(sessionId)
 
   const [itemPopoverOpen, setItemPopoverOpen] = useState(false)
 

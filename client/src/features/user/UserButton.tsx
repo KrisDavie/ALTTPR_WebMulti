@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/menubar"
 import { useAuthUserMutation } from "../api/apiSlice"
 import { setUser } from "./userSlice"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Cookies from "js-cookie"
 import {
   Dialog,
@@ -29,16 +29,16 @@ function UserButton() {
 
   const username = user.username ?? "Guest#" + ("0000" + user.id).slice(-4)
 
-  const [authUser, result] = useAuthUserMutation()
+  const [authUser, _result] = useAuthUserMutation()
 
-  async function fetchUser() {
+  const fetchUser = useCallback(async () => {
     try {
       const payload = await authUser({}).unwrap()
       dispatch(setUser(payload))
     } catch (error) {
       console.error("rejected", error)
     }
-  }
+  }, [authUser, dispatch])
 
   async function createGuestUser() {
     Cookies.remove("user_id")
@@ -58,7 +58,7 @@ function UserButton() {
       return
     }
     fetchUser()
-  }, [userIdCookie, userTypeCookie])
+  }, [userIdCookie, userTypeCookie, fetchUser, user.id])
 
   // Check the popup to see when the code has been stored
   useEffect(() => {
@@ -68,15 +68,15 @@ function UserButton() {
 
     const timer = setInterval(() => {
       if (!discordPopup || discordPopup.closed) {
-        timer && clearInterval(timer)
+        if (timer) clearInterval(timer)
         return
       }
       try {
-        const popupUrl = discordPopup.location.href
-      } catch (e) {
+        const _popupUrl = discordPopup.location.href
+      } catch {
         return
       }
-      
+
       const popupUrl = discordPopup.location.href
       const searchParams = new URL(popupUrl).searchParams
       const code = searchParams.get("code")
@@ -86,10 +86,10 @@ function UserButton() {
         discordPopup.close()
         setDiscordPopup(null)
         fetchUser()
-        timer && clearInterval(timer)
-      }
+        if (timer) clearInterval(timer)
+        }
     }, 1000)
-  }, [discordPopup])
+  }, [discordPopup, fetchUser])
 
   function openDiscordPopup() {
     const width = 500

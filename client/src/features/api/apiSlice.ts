@@ -43,7 +43,7 @@ export const apiSlice = createApi({
       query: sessionId => `/session/${sessionId}/players`,
     }),
     sendLogMessage: builder.mutation({
-      query: ({ sessionId, user_id, player_id, message }) => ({
+      query: ({ sessionId, player_id, message }) => ({
         url: `/session/${sessionId}/log`,
         method: "POST",
         body: { player_id: player_id,

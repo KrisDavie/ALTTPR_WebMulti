@@ -9,7 +9,7 @@ import {
   setGrpcPort,
 } from "./sniSlice"
 
-import { useGetDevicesQuery, useLazyGetDevicesQuery } from "./sniApiSlice"
+import { useLazyGetDevicesQuery } from "./sniApiSlice"
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -32,13 +32,12 @@ import {
 } from "@/components/ui/select"
 
 import { useAppDispatch } from "@/app/hooks"
-import { on } from "events"
 
 function SniSettings() {
   const dispatch = useAppDispatch()
   const devices: string[] = useAppSelector(selectAvailableDevices)
-  const [triggerGetDevicesQuery, result, lastPromiseInfo] = useLazyGetDevicesQuery()
-  
+  const [triggerGetDevicesQuery] = useLazyGetDevicesQuery()
+
   const GPRCFormSchema = z.object({
     hostname: z.union([
       z.string().url({
@@ -50,9 +49,7 @@ function SniSettings() {
   })
 
   const DeviceFormSchema = z.object({
-    device: z
-      .string()
-      .refine(d => devices.includes(d)),
+    device: z.string().refine(d => devices.includes(d)),
   })
 
   const gprcForm = useForm<z.infer<typeof GPRCFormSchema>>({
@@ -80,23 +77,18 @@ function SniSettings() {
   }
 
   async function refreshDevices() {
-    await triggerGetDevicesQuery({noConnect: true})
+    await triggerGetDevicesQuery({ noConnect: true })
   }
 
-
-  const handleConnect = (event: React.MouseEvent) => {
-    // dispatch(connect())
-  }
-
-  const handleReset = (event: React.MouseEvent) => {
-    // dispatch(reset())
+  const handleReset = () => {
+    dispatch(reset())
   }
 
   useEffect(() => {
     if (devices.length > 0) {
       deviceForm.setValue("device", devices[0])
     }
-  }, [devices])
+  }, [devices, deviceForm])
 
   return (
     <div className="flex flex-col w-auto">
@@ -149,12 +141,10 @@ function SniSettings() {
             />
             <div>
               <Button type="submit">Set GRPC settings</Button>
-
             </div>
-
           </form>
         </Form>
-        </div>
+      </div>
       <div className="flex flex-col">
         <Form {...deviceForm}>
           <form

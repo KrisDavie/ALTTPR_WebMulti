@@ -1,4 +1,4 @@
-import { useAppDispatch, useAppSelector } from "@/app/hooks"
+import { useAppSelector } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
@@ -7,8 +7,7 @@ import MultiClientForm from "./connectForm"
 import { TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Tooltip } from "@radix-ui/react-tooltip"
 
-function landingPage() {
-  const dispatch = useAppDispatch()
+function LandingPage() {
   const [selectedMode, setSelectedMode] = useState("")
   const user = useAppSelector(state => state.user)
   const [tooltipOpen, setTooltipOpen] = useState(false)
@@ -65,4 +64,4 @@ function landingPage() {
   )
 }
 
-export default landingPage
+export default LandingPage

@@ -1,8 +1,8 @@
 import { Params, useLoaderData } from "react-router-dom"
 import MultiEventViewer from "./multiEventViewer"
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
-import { connect, setSession, pauseReceiving, resumeReceiving } from "./multiworldSlice"
-import { useSendForfeitMutation } from "../api/apiSlice"
+import { connect, setSession } from "./multiworldSlice"
+import { useSendForfeitMutation, useStartDebugMutation } from "../api/apiSlice"
 import ItemSend from "./itemSend"
 import { Button } from "@/components/ui/button"
 import { useEffect } from "react"
@@ -11,7 +11,12 @@ import PauseReceivingPanel from "./PauseReceivingPanel"
 export function loader({ params }: { params: Params }) {
   return { sessionId: params.sessionId }
 }
-function MultiView(props: any) {
+
+interface MultiViewProps {
+  adminMode: boolean
+}
+
+function MultiView(props: MultiViewProps) {
   const { adminMode } = props
   const dispatch = useAppDispatch()
   const playerId = useAppSelector(state => state.multiworld.player_id)
@@ -23,7 +28,7 @@ function MultiView(props: any) {
     dispatch(setSession({ sessionId }))
     dispatch(connect())
   }
-  , [sessionId])
+  , [sessionId, dispatch])
 
   function hasForfeited() {
     return sendForfeitResult.isSuccess || sendForfeitResult.isLoading

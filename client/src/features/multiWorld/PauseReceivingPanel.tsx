@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { pauseReceiving, resumeReceiving } from "./multiworldSlice"
 import _SpriteLocs from "@/../static/sprite_locs.json"
 import { useEffect, useState } from "react"
+import { Event } from "@/app/types"
 
 type TSpriteLocs = {
   [key: string]: number[]
@@ -29,12 +30,12 @@ function PauseReceivingPanel() {
         setWasPaused(false)
       }
     }
-  }, [receiving_paused, currentQueue])
+  }, [receiving_paused, currentQueue, wasPaused])
 
   let withheldItems
 
   if (receiving_paused || wasPaused) {
-    withheldItems = currentQueue.map((item: any) => {
+    withheldItems = currentQueue.map((item: Event) => {
       let item_name = item.event_data.item_name
       if (item_name.includes("Crystal")) {
         item_name = ['5', '6'].includes(item_name[8]) ? "Red Crystal" : "Crystal"

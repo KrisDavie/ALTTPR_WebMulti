@@ -1,3 +1,4 @@
+import { Event } from "@/app/types"
 import type { PayloadAction } from "@reduxjs/toolkit"
 import { createSlice } from "@reduxjs/toolkit"
 
@@ -7,7 +8,7 @@ export interface SniSliceState {
   grpcConnected: boolean
   deviceList: string[]
   connectedDevice?: string
-  itemQueue: any[] // Maybe 
+  itemQueue: Event[]
 }
 
 const initialState: SniSliceState = {
@@ -31,12 +32,12 @@ export const sniSlice = createSlice({
     },
     addItemsToQueue: (state, action: PayloadAction<string[]>) => {
       state.itemQueue = [...state.itemQueue, ...action.payload].sort(
-        (a: any, b: any) =>
+        (a: Event, b: Event) =>
           (a.event_idx[0] * 256 +
           a.event_idx[1]) -
           (b.event_idx[0] * 256 + b.event_idx[1]),
-      ).reduce((acc: any[], x: any) => {
-        if (!acc.some((item: any) => item.id === x.id)) {
+      ).reduce((acc: Event[], x: Event) => {
+        if (!acc.some((item: Event) => item.id === x.id)) {
           acc.push(x)
         }
         return acc

@@ -12,17 +12,18 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import * as z from "zod"
-
-import { useAppDispatch } from "@/app/hooks"
 import { useUploadMultiDataMutation } from "../api/apiSlice"
 
 import { useNavigate } from "react-router-dom"
 
-function MultiServer(props: any) {
+interface MultiClientFormProps {
+  setSelectedMode: (mode: string) => void
+}
+
+function MultiServer(props: MultiClientFormProps) {
   const { setSelectedMode } = props
-  const dispatch = useAppDispatch()
   const navigate = useNavigate()
-  const [uploadMultiData, result] = useUploadMultiDataMutation()
+  const [uploadMultiData] = useUploadMultiDataMutation()
   // Form with a file upload and a select for the game
   const FormSchema = z.object({
     file: z.any(),
@@ -39,7 +40,7 @@ function MultiServer(props: any) {
   })
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    const res: any = await uploadMultiData({
+    const res = await uploadMultiData({
       data: data.file[0],
       game: data.game,
       password: data.password,

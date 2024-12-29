@@ -1,7 +1,12 @@
 import type { RootState } from "@/app/store"
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react"
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport"
-import { setConnectedDevice, setDeviceList, setGrpcConnected, shiftQueue } from "./sniSlice"
+import {
+  setConnectedDevice,
+  setDeviceList,
+  setGrpcConnected,
+  shiftQueue,
+} from "./sniSlice"
 import {
   DevicesClient,
   DeviceControlClient,
@@ -18,19 +23,14 @@ import {
 import { log } from "../loggerSlice"
 import type { AppDispatch } from "@/app/store"
 
-const getTransport = (state: any) => {
+const getTransport = (state: RootState) => {
   return new GrpcWebFetchTransport({
     baseUrl: `http://${state.sni.grpcHost}:${state.sni.grpcPort}`,
   })
 }
 
-const hexStringToU8Arr = (hexString: string) => {
-  const bytes = hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16))
-  return bytes ? Uint8Array.from(bytes) : new Uint8Array(0)
-}
-
 export const ingame_modes = [0x07, 0x09, 0x0b]
-const save_quit_modes = [0x00, 0x01, 0x17, 0x1B]
+const save_quit_modes = [0x00, 0x01, 0x17, 0x1b]
 
 type SRAMLocs = {
   [key: number]: [string, number]
@@ -51,7 +51,7 @@ const sram_locs: SRAMLocs = {
   0xf66018: ["pots", 0x250],
   0xf66268: ["sprites", 0x250],
   0xf664b8: ["shops", 0x29],
-  0xf5f472: ["prizes", 0x2]
+  0xf5f472: ["prizes", 0x2],
 }
 
 let receiving_lock = false
@@ -70,12 +70,7 @@ export const sniApiSlice = createApi({
   reducerPath: "sniApi",
   endpoints: builder => ({
     getDevices: builder.query({
-      async queryFn(
-        arg: { noConnect: boolean },
-        queryApi,
-        extraOptions,
-        baseQuery,
-      ) {
+      async queryFn(arg: { noConnect: boolean }, queryApi) {
         const transport = getTransport(queryApi.getState() as RootState)
         try {
           const devClient = new DevicesClient(transport)
@@ -89,13 +84,13 @@ export const sniApiSlice = createApi({
             queryApi.dispatch(setConnectedDevice(devices[0]))
           }
           return { data: devices }
-        } catch (e) {
+        } catch {
           return { error: "Error getting devices." }
         }
       },
     }),
     reset: builder.mutation({
-      async queryFn(arg, queryApi, extraOptions, baseQuery) {
+      async queryFn(arg, queryApi) {
         const state = queryApi.getState() as RootState
         const transport = getTransport(state)
         const controlClient = new DeviceControlClient(transport)
@@ -110,7 +105,7 @@ export const sniApiSlice = createApi({
     }),
 
     sendManyItems: builder.mutation({
-      async queryFn(arg: {}, queryApi, extraOptions, baseQuery) {
+      async queryFn(arg: object, queryApi) {
         let state = queryApi.getState() as RootState
         const curQueue = [...state.sni.itemQueue]
         if (state.multiworld.receiving_paused) {
@@ -133,10 +128,13 @@ export const sniApiSlice = createApi({
         }
 
         // We wait until receiving is set before actually sending items
-        queryApi.dispatch(log(`Sending ${curQueue.length} items. Waiting for state to be done receiving and to be in game...`))
+        queryApi.dispatch(
+          log(
+            `Sending ${curQueue.length} items. Waiting for state to be done receiving and to be in game...`,
+          ),
+        )
         let game_mode = 0x00
 
-        // @ts-ignore
         while (!getReceiveState(state) || !ingame_modes.includes(game_mode)) {
           const game_mode_response = await controlMem.singleRead({
             uri: connectedDevice,
@@ -152,11 +150,13 @@ export const sniApiSlice = createApi({
             return { error: "Error reading memory, no reposonse" }
           }
           game_mode = game_mode_response.response.response.data[0]
-          
+
           await new Promise(r => setTimeout(r, 250))
           state = queryApi.getState() as RootState
         }
-        queryApi.dispatch(log(`Done Receiving and in game. Sending ${curQueue.length} items`))
+        queryApi.dispatch(
+          log(`Done Receiving and in game. Sending ${curQueue.length} items`),
+        )
 
         let writeResponse
         // for (let i = 0; i < arg.memVals.length; i++) {
@@ -169,7 +169,7 @@ export const sniApiSlice = createApi({
           }
           const memVal = state.sni.itemQueue[0]
           if (!memVal) {
-            continue;
+            continue
           }
           const event_idx = memVal.event_idx[0] * 256 + memVal.event_idx[1]
           queryApi.dispatch(shiftQueue())
@@ -192,15 +192,17 @@ export const sniApiSlice = createApi({
             }
             last_item_id = readCurItem.response.response.data[2]
             last_event_idx =
-                readCurItem.response.response.data[0] * 256 +
-                readCurItem.response.response.data[1]
+              readCurItem.response.response.data[0] * 256 +
+              readCurItem.response.response.data[1]
             if (last_item_id === 0) {
               if (last_event_idx === 0) {
                 // This should never be 0, but the rom sometimes sets it to 0 when changing state
                 // Wait for it to be a real value again
-                continue 
+                continue
               }
-              queryApi.dispatch(log(`Previous item finished, index was ${last_event_idx}`))
+              queryApi.dispatch(
+                log(`Previous item finished, index was ${last_event_idx}`),
+              )
               break
             }
             await new Promise(r => setTimeout(r, 250))
@@ -208,7 +210,11 @@ export const sniApiSlice = createApi({
 
           // Get index of current item and make sure it's greater than the last one so we don't resend any items
           if (event_idx !== last_event_idx + 1) {
-            queryApi.dispatch(log(`Skipping item ${event_idx} as it is not the next event after ${last_event_idx}`))
+            queryApi.dispatch(
+              log(
+                `Skipping item ${event_idx} as it is not the next event after ${last_event_idx}`,
+              ),
+            )
             await new Promise(r => setTimeout(r, 50))
             continue
           }
@@ -227,7 +233,11 @@ export const sniApiSlice = createApi({
               ]),
             },
           })
-          queryApi.dispatch(log(`Done sending item ${memVal.event_data.item_name}. Getting new state.`))
+          queryApi.dispatch(
+            log(
+              `Done sending item ${memVal.event_data.item_name}. Getting new state.`,
+            ),
+          )
         }
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state
@@ -238,12 +248,7 @@ export const sniApiSlice = createApi({
       },
     }),
     readSRAM: builder.query({
-      async queryFn(
-        arg: { noPots?: boolean; noEnemies?: boolean },
-        queryApi,
-        extraOptions,
-        baseQuery,
-      ) {
+      async queryFn(arg: { noPots?: boolean; noEnemies?: boolean }, queryApi) {
         const state = queryApi.getState() as RootState
         const transport = getTransport(state)
         const controlMem = new DeviceMemoryClient(transport)

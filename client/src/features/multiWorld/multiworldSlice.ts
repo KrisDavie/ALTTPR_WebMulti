@@ -36,12 +36,12 @@ export const multiworldSlice = createSlice({
   name: "multiworld",
   initialState: initialState,
   reducers: {
-    connect: state => {},
-    send: state => {},
-    disconnect: state => {},
-    reconnect: state => {},
-    sendPlayerInfo: (state, action) => {},
-    sendChatMessage: (state, action) => {},
+    connect: () => {},
+    send: () => {},
+    disconnect: () => {},
+    reconnect: () => {},
+    sendPlayerInfo: () => {},
+    sendChatMessage: () => {},
     setSession: (state, action) => {
       state.sessionId = action.payload.sessionId
       state.password = action.payload.password || ""

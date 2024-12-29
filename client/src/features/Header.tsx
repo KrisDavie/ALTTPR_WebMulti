@@ -26,7 +26,6 @@ import {
 import { useLazyGetPlayersQuery } from "./api/apiSlice"
 import { useEffect, useState } from "react"
 import UserButton from "./user/UserButton"
-import pako from "pako"
 import { log } from "./loggerSlice"
 
 function Header() {
@@ -51,7 +50,6 @@ function Header() {
     state => state.multiworld.sram_updating_on_server,
   )
 
-  const currentLog = useAppSelector(state => state.logger.log)
   const [sendManyItems] = useSendManyItemsMutation()
 
   const [getPlayersQuery, players] = useLazyGetPlayersQuery()
@@ -60,7 +58,7 @@ function Header() {
     if (sessionId) {
       getPlayersQuery(sessionId)
     }
-  }, [sessionId])
+  }, [sessionId, getPlayersQuery])
 
   useGetDevicesQuery(
     { noConnect: false },
@@ -91,23 +89,8 @@ function Header() {
       return
     }
     sendManyItems({})
-  }, [receiving, sessionId, sram])
+  }, [receiving, sessionId, sram, sendManyItems])
 
-  function saveLog() {
-    // Add new lines to log entries, compress the log with gzip, and save it to a file in the browser
-    const log = currentLog.map(entry => entry + "\n").join("")
-    // Compress
-    const encoder = new TextEncoder()
-    const compressed = pako.gzip(encoder.encode(log))
-    // Save to file
-    const blob = new Blob([compressed], { type: "application/gzip" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "multiworld.log.gz"
-    a.click()
-    URL.revokeObjectURL(url)
-  }
 
   function reportBug() {
     const reportText = prompt("Please describe the bug you encountered:")
