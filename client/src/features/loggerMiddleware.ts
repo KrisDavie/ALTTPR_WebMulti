@@ -10,7 +10,7 @@ export const loggerMiddleware: Middleware<{}, RootState> = api => {
       return next(action)
     }
 
-    let originalState = api.getState()
+    const originalState = api.getState()
 
     if (log.match(action)) {
       if (!originalState.logger.enabled) {

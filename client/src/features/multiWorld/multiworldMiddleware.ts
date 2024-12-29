@@ -32,7 +32,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
       return next(action)
     }
 
-    let originalState = api.getState()
+    const originalState = api.getState()
 
     if (reconnect.match(action)) {
       if (socket) {
@@ -61,8 +61,8 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         }
       }
       socket.onmessage = event => {
-        let data = JSON.parse(event.data)
-        let currentState = api.getState() as RootState
+        const data = JSON.parse(event.data)
+        const currentState = api.getState() as RootState
         if (!data.id) {
           data.id = nanoid()
         }
@@ -227,7 +227,7 @@ export const multiworldMiddleware: Middleware<{}, RootState> = api => {
         }
       }
     }
-    let currentState = api.getState() as RootState
+    const currentState = api.getState() as RootState
     if (
       updateMemory.match(action) &&
       !currentState.multiworld.receiving &&

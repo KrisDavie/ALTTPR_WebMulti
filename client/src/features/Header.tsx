@@ -55,6 +55,7 @@ function Header() {
   const [sendManyItems] = useSendManyItemsMutation()
 
   const [getPlayersQuery, players] = useLazyGetPlayersQuery()
+  
   useEffect(() => {
     if (sessionId) {
       getPlayersQuery(sessionId)

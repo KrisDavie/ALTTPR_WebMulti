@@ -22,21 +22,21 @@ export const sniMiddleware: Middleware<{}, RootState> =
       return result
     }
 
-    let originalState = api.getState()
-    let transport = new GrpcWebFetchTransport({
+    const originalState = api.getState()
+    const transport = new GrpcWebFetchTransport({
       baseUrl: `http://${originalState.sni.grpcHost}:${originalState.sni.grpcPort}`,
     })
 
     switch (action.type) {
       case "sni/connect":
-        let devClient = new DevicesClient(transport)
-        let devicesReponse = await devClient.listDevices({ kinds: [] })
-        let devices = devicesReponse.response.devices.map(device => device.uri)
+        const devClient = new DevicesClient(transport)
+        const devicesReponse = await devClient.listDevices({ kinds: [] })
+        const devices = devicesReponse.response.devices.map(device => device.uri)
         api.dispatch(setDeviceList(devices))
         api.dispatch(setConnectedDevice(devices[0]))
         break
       case "sni/reset":
-        let controlClient = new DeviceControlClient(transport)
+        const controlClient = new DeviceControlClient(transport)
         originalState.sni.connectedDevice && await controlClient.resetSystem({ uri: originalState.sni.connectedDevice })
         break
     }

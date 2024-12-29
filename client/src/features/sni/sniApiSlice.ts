@@ -78,9 +78,9 @@ export const sniApiSlice = createApi({
       ) {
         const transport = getTransport(queryApi.getState() as RootState)
         try {
-          let devClient = new DevicesClient(transport)
-          let devicesReponse = await devClient.listDevices({ kinds: [] })
-          let devices = devicesReponse.response.devices.map(
+          const devClient = new DevicesClient(transport)
+          const devicesReponse = await devClient.listDevices({ kinds: [] })
+          const devices = devicesReponse.response.devices.map(
             device => device.uri,
           )
           queryApi.dispatch(setGrpcConnected(true))
@@ -98,8 +98,8 @@ export const sniApiSlice = createApi({
       async queryFn(arg, queryApi, extraOptions, baseQuery) {
         const state = queryApi.getState() as RootState
         const transport = getTransport(state)
-        let controlClient = new DeviceControlClient(transport)
-        let connectedDevice = state.sni.connectedDevice
+        const controlClient = new DeviceControlClient(transport)
+        const connectedDevice = state.sni.connectedDevice
         if (connectedDevice) {
           const res = await controlClient.resetSystem({ uri: connectedDevice })
           return { data: res }
@@ -112,7 +112,7 @@ export const sniApiSlice = createApi({
     sendManyItems: builder.mutation({
       async queryFn(arg: {}, queryApi, extraOptions, baseQuery) {
         let state = queryApi.getState() as RootState
-        let curQueue = [...state.sni.itemQueue]
+        const curQueue = [...state.sni.itemQueue]
         if (state.multiworld.receiving_paused) {
           return { error: "Receiving is paused" }
         }
@@ -125,8 +125,8 @@ export const sniApiSlice = createApi({
         updateReceiving(queryApi.dispatch, true)
 
         const transport = getTransport(state)
-        let controlMem = new DeviceMemoryClient(transport)
-        let connectedDevice = state.sni.connectedDevice
+        const controlMem = new DeviceMemoryClient(transport)
+        const connectedDevice = state.sni.connectedDevice
         if (!connectedDevice) {
           updateReceiving(queryApi.dispatch, false)
           return { error: "No device or memory data" }
@@ -167,7 +167,7 @@ export const sniApiSlice = createApi({
             await new Promise(r => setTimeout(r, 500))
             continue
           }
-          let memVal = state.sni.itemQueue[0]
+          const memVal = state.sni.itemQueue[0]
           if (!memVal) {
             continue;
           }
@@ -246,15 +246,15 @@ export const sniApiSlice = createApi({
       ) {
         const state = queryApi.getState() as RootState
         const transport = getTransport(state)
-        let controlMem = new DeviceMemoryClient(transport)
-        let connectedDevice = state.sni.connectedDevice
+        const controlMem = new DeviceMemoryClient(transport)
+        const connectedDevice = state.sni.connectedDevice
         if (!connectedDevice) {
           return { error: "No device selected" }
         }
         // Safety check to make sure we're done receiving at the cost of some latency
         let last_item_id = 255
         while (last_item_id > 0) {
-          let readResponse = await controlMem.singleRead({
+          const readResponse = await controlMem.singleRead({
             uri: connectedDevice,
             request: {
               requestMemoryMapping: MemoryMapping.LoROM,
@@ -275,8 +275,8 @@ export const sniApiSlice = createApi({
           await new Promise(r => setTimeout(r, 550))
         }
 
-        let requests = []
-        for (let [loc, [name, size]] of Object.entries(sram_locs)) {
+        const requests = []
+        for (const [loc, [name, size]] of Object.entries(sram_locs)) {
           if (
             (name === "pots" && arg.noPots) ||
             (name === "sprites" && arg.noEnemies) ||
@@ -293,7 +293,7 @@ export const sniApiSlice = createApi({
           })
         }
 
-        let multiReadResponse = await controlMem.multiRead({
+        const multiReadResponse = await controlMem.multiRead({
           uri: connectedDevice,
           requests: requests,
         })
@@ -302,7 +302,7 @@ export const sniApiSlice = createApi({
           return { error: "Error reading memory, no reposonse" }
         }
 
-        let sram = {} as { [key: string]: number[] }
+        const sram = {} as { [key: string]: number[] }
         multiReadResponse.response.responses.forEach(res => {
           sram[sram_locs[res.requestAddress][0]] = Array.from(res.data)
         })

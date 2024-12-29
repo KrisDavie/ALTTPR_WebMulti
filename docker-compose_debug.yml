@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   web:
     build:
@@ -11,6 +10,7 @@ services:
       - ./client/static:/usr/src/app/static
       - ./client/vite.config.ts:/usr/src/app/vite.config.ts
       - ./client/tsconfig.json:/usr/src/app/tsconfig.json
+      - ./client/tsconfig.app.json:/usr/src/app/tsconfig.app.json
       - ./client/tsconfig.node.json:/usr/src/app/tsconfig.node.json
       - ./client/index.html:/usr/src/app/index.html
       - ./client/tailwind.config.js:/usr/src/app/tailwind.config.js
@@ -53,7 +53,7 @@ services:
       - "5432:5432"
   pgadmin:
     container_name: pgadmin4_container
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4:8.14.0
     restart: always
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com

@@ -41,7 +41,7 @@ interface IItems {
   [index: string]: number | number[]
 }
 
-var items: IItems = _items
+const items: IItems = _items
 
 function ItemSend(props: any) {
   const { sessionId } = props
