@@ -40,7 +40,7 @@ class Log(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
     player_id = Column(Integer, index=True, nullable=True)
-    content = Column(String, index=True)
+    content = Column(String)
     session = relationship("MWSession", back_populates="logs")
     
 
@@ -112,7 +112,7 @@ class Game(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
-    description = Column(String, index=True)
+    description = Column(String)
 
     mwsessions = relationship("MWSession", back_populates="game")
 
