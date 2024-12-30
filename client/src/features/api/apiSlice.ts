@@ -29,6 +29,14 @@ export const apiSlice = createApi({
         }
       },
     }),
+    logoutUser: builder.mutation({
+      query: () => {
+        return {
+          url: "/users/logout",
+          method: "POST",
+        }
+      },
+    }),
     getSessionEvents: builder.query({
       query: sessionId => `/session/${sessionId}/events`,
       transformResponse: (response: Event[]) => {
@@ -91,6 +99,7 @@ export const {
   useGetPlayersQuery,
   useLazyGetPlayersQuery,
   useAuthUserMutation,
+  useLogoutUserMutation,
   useGetSessionEventsQuery,
   useSendNewItemsMutation,
 } = apiSlice

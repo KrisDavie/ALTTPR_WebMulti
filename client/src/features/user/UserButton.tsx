@@ -7,7 +7,7 @@ import {
   Menubar,
   MenubarItem,
 } from "@/components/ui/menubar"
-import { useAuthUserMutation } from "../api/apiSlice"
+import { useAuthUserMutation, useLogoutUserMutation } from "../api/apiSlice"
 import { setUser } from "./userSlice"
 import { useEffect, useState, useCallback } from "react"
 import Cookies from "js-cookie"
@@ -30,6 +30,7 @@ function UserButton() {
   const username = user.username ?? "Guest#" + ("0000" + user.id).slice(-4)
 
   const [authUser, _result] = useAuthUserMutation()
+  const [logoutUser] = useLogoutUserMutation()
 
   const fetchUser = useCallback(async () => {
     try {
@@ -106,15 +107,17 @@ function UserButton() {
     setDiscordPopup(popup)
   }
 
-  function logout(force = false) {
+  async function logout(force = false) {
     if (Cookies.get("user_type") === "guest" && !force) {
       setModalOpen(true)
     } else {
       setModalOpen(false)
-      Cookies.remove("user_id")
-      Cookies.remove("session_token")
-      Cookies.remove("user_type")
-      dispatch(setUser({ id: 0 }))
+      const payload = await logoutUser({}).unwrap()
+      if (payload.logoutResult === "success") {
+        dispatch(setUser({ id: 0 }))
+        setUserIdCookie(undefined)
+        setUserTypeCookie(undefined)
+      }
     }
   }
 

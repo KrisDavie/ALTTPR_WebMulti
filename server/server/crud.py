@@ -73,6 +73,14 @@ def update_user_session_token(db: Session, user_id: int, session_token: str, old
     db.refresh(db_user)
     return db_user
 
+def remove_user_session_token(db: Session, user_id: int, session_token: str):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if session_token in db_user.session_tokens:
+        db_user.session_tokens.remove(session_token)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
 def get_games(db: Session, skip: int = 0, limit: int = 0):
     if limit <= 0:
         return db.query(models.Game).offset(skip).all()

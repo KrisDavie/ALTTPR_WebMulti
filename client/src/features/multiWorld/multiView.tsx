@@ -22,7 +22,6 @@ function MultiView(props: MultiViewProps) {
   const playerId = useAppSelector(state => state.multiworld.player_id)
   const { sessionId } = useLoaderData() as { sessionId: string }
   const [sendForfeit, sendForfeitResult] = useSendForfeitMutation()
-  const receiving_paused = useAppSelector(state => state.multiworld.receiving_paused)
 
   useEffect(() => {
     dispatch(setSession({ sessionId }))

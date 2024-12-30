@@ -38,6 +38,7 @@ services:
     volumes:
       - ./data:/data
       - ./server/server:/app/server
+      - ./server/alembic:/app/alembic
     env_file:
       - path: ./server/.env
         required: true

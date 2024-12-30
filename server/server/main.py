@@ -33,11 +33,10 @@ from server.ws import ws
 from server.data import data as loc_data
 from server.logging import logging_config
 from server.dependencies import get_db
-from server.utils import system_chat, countdown
 
 def run_migrations():
     alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
+    command.upgrade(alembic_cfg, "heads")
 
 
 @asynccontextmanager
@@ -114,6 +113,13 @@ def create_guest_user(response: Response, db: Annotated[Session, Depends(get_db)
     )
     return user, token
 
+def user_logout(response: Response, unauthorized: bool = False):
+    response.delete_cookie("session_token")
+    response.delete_cookie("user_id")
+    response.delete_cookie("user_type")
+    if unauthorized:
+        raise HTTPException(status_code=401, detail="Invalid or Missing Session Token", headers=response.headers)
+    return response
 
 def verify_session_token(
     response: Response, request: Request, db: Annotated[Session, Depends(get_db)]
@@ -132,14 +138,11 @@ def verify_session_token(
     try:
         fernet.decrypt(token.encode())
     except:
-        response.delete_cookie("session_token")
-        raise HTTPException(status_code=401, detail="Invalid session token")
+        user_logout(response, unauthorized=True)
     if fernet.decrypt(token.encode()) not in [
         fernet.decrypt(x.encode()) for x in user.session_tokens
     ]:
-        # if fernet.decrypt(user.session_token.encode()) != fernet.decrypt(token.encode()):
-        response.delete_cookie("session_token")
-        raise HTTPException(status_code=401, detail="Invalid session token")
+        user_logout(response, unauthorized=True)
     if (
         fernet.extract_timestamp(token.encode())
         < (
@@ -207,9 +210,7 @@ async def discord_auth(
             logger.debug(f"User ID: {user_id}, should verify")
             user, token = verify_session_token(response, request, db)
         else:
-            response.delete_cookie("session_token")
-            user, token = verify_session_token(response, request, db)
-            raise HTTPException(status_code=401, detail="Invalid session token")
+            user_logout(response, unauthorized=True)
     # No user set in the browser
     if not user:
         # TODO: This workflow could be better
@@ -254,6 +255,13 @@ async def discord_auth(
         </body>
     </html>
     """
+
+@app.post("/users/logout")
+def logout_user(response: Response, db: Annotated[Session, Depends(get_db)], user_info: Annotated[dict, Depends(verify_session_token)] = None):
+    user_logout(response)
+    user, token = user_info
+    crud.remove_user_session_token(db, user.id, token)
+    return {"message": "Logged out", "logoutResult": "success"}
 
 
 @app.get("/users/{user_id}", response_model=schemas.User)
