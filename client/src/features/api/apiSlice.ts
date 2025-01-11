@@ -1,12 +1,14 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react"
 import { Event } from "@/app/types"
 import { EventTypes } from "@/app/types"
+import { ISession } from "@/components/dashboard/MultiworldSessions"
 
 const baseUrl = "/api/v1"
 
 export const apiSlice = createApi({
   baseQuery: fetchBaseQuery({ baseUrl, credentials: "include" }),
   reducerPath: "api",
+  tagTypes: ["User", "Sessions"],
   endpoints: builder => ({
     uploadMultiData: builder.mutation({
       query: ({ data, game }) => {
@@ -20,11 +22,12 @@ export const apiSlice = createApi({
           body: body,
         }
       },
+      invalidatesTags: ["Sessions"],
     }),
     authUser: builder.mutation({
-      query: () => {
+      query: ({ authOnly }) => {
         return {
-          url: "/users/auth",
+          url: `/users/auth?auth_only=${authOnly}`,
           method: "POST",
         }
       },
@@ -36,6 +39,7 @@ export const apiSlice = createApi({
           method: "POST",
         }
       },
+      invalidatesTags: ["User", "Sessions"],
     }),
     getSessionEvents: builder.query({
       query: sessionId => `/session/${sessionId}/events`,
@@ -49,6 +53,16 @@ export const apiSlice = createApi({
     }),
     getPlayers: builder.query({
       query: sessionId => `/session/${sessionId}/players`,
+    }),
+    getAllSessions: builder.query<ISession[], number>({
+      query: userId => `/users/${userId}/sessions`,
+      providesTags: ["Sessions"],
+      transformResponse: (response: ISession[]) => {
+        return response.sort((a, b) => b.createdTimestamp - a.createdTimestamp)
+      }
+    }),
+    getSession: builder.query<ISession, string>({
+      query: sessionId => `/session/${sessionId}`,
     }),
     sendLogMessage: builder.mutation({
       query: ({ sessionId, player_id, message }) => ({
@@ -67,6 +81,12 @@ export const apiSlice = createApi({
         },
       }),
     }),
+    startDebug: builder.mutation({
+      query: ({ sessionId, numItems }) => ({
+        url: `/session/${sessionId}/debug/${numItems}`,
+        method: "POST",
+      }),
+    }),
     sendNewItems: builder.mutation({
       query: ({
         sessionId,
@@ -79,7 +99,7 @@ export const apiSlice = createApi({
         players: number[]
         password: string | undefined
       }) => ({
-        url: `/admin/${sessionId}/send`,
+        url: `/session/${sessionId}/adminSend`,
         method: "POST",
         body: {
           event_type: players.length > 1 ? "send_multi" : "send_single",
@@ -94,9 +114,12 @@ export const apiSlice = createApi({
 
 export const {
   useUploadMultiDataMutation,
+  useStartDebugMutation,
   useSendForfeitMutation,
   useSendLogMessageMutation,
   useGetPlayersQuery,
+  useGetSessionQuery,
+  useGetAllSessionsQuery,
   useLazyGetPlayersQuery,
   useAuthUserMutation,
   useLogoutUserMutation,

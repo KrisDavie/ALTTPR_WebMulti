@@ -41,11 +41,11 @@ interface IItems {
 
 const items: IItems = _items
 
-interface ItemSendProps {
+interface ItemSenderProps {
   sessionId: string
 }
 
-function ItemSend(props: ItemSendProps) {
+function ItemSender(props: ItemSenderProps) {
   const { sessionId } = props
   const [sendItems] = useSendNewItemsMutation()
   const { isLoading, data: players } = useGetPlayersQuery(sessionId)
@@ -207,4 +207,4 @@ function ItemSend(props: ItemSendProps) {
   )
 }
 
-export default ItemSend
+export default ItemSender

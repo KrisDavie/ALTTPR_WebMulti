@@ -1,4 +1,3 @@
-import type { RootState } from "@/app/store"
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react"
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport"
 import {
@@ -6,6 +5,7 @@ import {
   setDeviceList,
   setGrpcConnected,
   shiftQueue,
+  SniSliceState
 } from "./sniSlice"
 import {
   DevicesClient,
@@ -14,6 +14,7 @@ import {
 } from "@/sni/sni.client"
 import { AddressSpace, MemoryMapping } from "@/sni/sni"
 import {
+  MultiworldSliceState,
   setPlayerInfo,
   updateMemory,
   setReceiving,
@@ -22,12 +23,6 @@ import {
 } from "../multiWorld/multiworldSlice"
 import { log } from "../loggerSlice"
 import type { AppDispatch } from "@/app/store"
-
-const getTransport = (state: RootState) => {
-  return new GrpcWebFetchTransport({
-    baseUrl: `http://${state.sni.grpcHost}:${state.sni.grpcPort}`,
-  })
-}
 
 export const ingame_modes = [0x07, 0x09, 0x0b]
 const save_quit_modes = [0x00, 0x01, 0x17, 0x1b]
@@ -61,8 +56,20 @@ const updateReceiving = (dispatch: AppDispatch, receiving_state: boolean) => {
   receiving_lock = receiving_state
 }
 
-const getReceiveState = (state: RootState) => {
+interface AccessedState {
+  multiworld: MultiworldSliceState
+  sni: SniSliceState
+}
+
+
+const getReceiveState = (state: AccessedState) => {
   return state.multiworld.receiving || receiving_lock
+}
+
+const getTransport = (state: AccessedState) => {
+  return new GrpcWebFetchTransport({
+    baseUrl: `http://${state.sni.grpcHost}:${state.sni.grpcPort}`,
+  })
 }
 
 export const sniApiSlice = createApi({
@@ -71,7 +78,7 @@ export const sniApiSlice = createApi({
   endpoints: builder => ({
     getDevices: builder.query({
       async queryFn(arg: { noConnect: boolean }, queryApi) {
-        const transport = getTransport(queryApi.getState() as RootState)
+        const transport = getTransport(queryApi.getState() as AccessedState)
         try {
           const devClient = new DevicesClient(transport)
           const devicesReponse = await devClient.listDevices({ kinds: [] })
@@ -91,7 +98,7 @@ export const sniApiSlice = createApi({
     }),
     reset: builder.mutation({
       async queryFn(arg, queryApi) {
-        const state = queryApi.getState() as RootState
+        const state = queryApi.getState() as AccessedState
         const transport = getTransport(state)
         const controlClient = new DeviceControlClient(transport)
         const connectedDevice = state.sni.connectedDevice
@@ -105,8 +112,8 @@ export const sniApiSlice = createApi({
     }),
 
     sendManyItems: builder.mutation({
-      async queryFn(arg: object, queryApi) {
-        let state = queryApi.getState() as RootState
+      async queryFn(_arg: object, queryApi) {
+        let state = queryApi.getState() as AccessedState
         const curQueue = [...state.sni.itemQueue]
         if (state.multiworld.receiving_paused) {
           return { error: "Receiving is paused" }
@@ -152,7 +159,7 @@ export const sniApiSlice = createApi({
           game_mode = game_mode_response.response.response.data[0]
 
           await new Promise(r => setTimeout(r, 250))
-          state = queryApi.getState() as RootState
+          state = queryApi.getState() as AccessedState
         }
         queryApi.dispatch(
           log(`Done Receiving and in game. Sending ${curQueue.length} items`),
@@ -160,9 +167,9 @@ export const sniApiSlice = createApi({
 
         let writeResponse
         // for (let i = 0; i < arg.memVals.length; i++) {
-        state = queryApi.getState() as RootState
+        state = queryApi.getState() as AccessedState
         while (state.sni.itemQueue.length > 0) {
-          state = queryApi.getState() as RootState
+          state = queryApi.getState() as AccessedState
           if (state.multiworld.receiving_paused) {
             await new Promise(r => setTimeout(r, 500))
             continue
@@ -233,9 +240,10 @@ export const sniApiSlice = createApi({
               ]),
             },
           })
+          
           queryApi.dispatch(
             log(
-              `Done sending item ${memVal.event_data.item_name}. Getting new state.`,
+              `Done sending item ${memVal.event_data?.item_name}. Getting new state.`,
             ),
           )
         }
@@ -249,7 +257,7 @@ export const sniApiSlice = createApi({
     }),
     readSRAM: builder.query({
       async queryFn(arg: { noPots?: boolean; noEnemies?: boolean }, queryApi) {
-        const state = queryApi.getState() as RootState
+        const state = queryApi.getState() as AccessedState
         const transport = getTransport(state)
         const controlMem = new DeviceMemoryClient(transport)
         const connectedDevice = state.sni.connectedDevice

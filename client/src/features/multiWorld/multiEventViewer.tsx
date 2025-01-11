@@ -94,7 +94,7 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     return acc
   }, [])
 
-  const eventContainerRef = useRef<HTMLElement>(null)
+  const eventContainerRef = useRef<HTMLDivElement>(null!)
 
   useEffect(() => {
     if (eventContainerRef.current && !hasScrolled) {

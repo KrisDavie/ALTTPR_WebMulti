@@ -46,7 +46,7 @@ function MultiServer(props: MultiClientFormProps) {
       password: data.password,
     })
 
-    navigate(`/multiAdmin/${res.data.mw_session}`)
+    navigate(`/multi/${res.data.mw_session}`)
 
   }
 

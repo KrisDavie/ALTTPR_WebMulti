@@ -1,26 +1,25 @@
 import { Params, useLoaderData } from "react-router-dom"
-import MultiEventViewer from "./multiEventViewer"
+import MultiEventViewer from "./MultiEventViewer"
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { connect, setSession } from "./multiworldSlice"
-import { useSendForfeitMutation, useStartDebugMutation } from "../api/apiSlice"
-import ItemSend from "./itemSend"
+import { useGetSessionQuery, useSendForfeitMutation} from "../api/apiSlice"
+import ItemSender from "./ItemSender"
 import { Button } from "@/components/ui/button"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import PauseReceivingPanel from "./PauseReceivingPanel"
 
 export function loader({ params }: { params: Params }) {
   return { sessionId: params.sessionId }
 }
 
-interface MultiViewProps {
-  adminMode: boolean
-}
 
-function MultiView(props: MultiViewProps) {
-  const { adminMode } = props
+function MultiView() {
   const dispatch = useAppDispatch()
   const playerId = useAppSelector(state => state.multiworld.player_id)
+  const user = useAppSelector(state => state.user)
   const { sessionId } = useLoaderData() as { sessionId: string }
+  const [adminMode, setAdminMode] = useState(false)
+  const { data: session, isLoading: sessionLoading } = useGetSessionQuery(sessionId)
   const [sendForfeit, sendForfeitResult] = useSendForfeitMutation()
 
   useEffect(() => {
@@ -28,6 +27,13 @@ function MultiView(props: MultiViewProps) {
     dispatch(connect())
   }
   , [sessionId, dispatch])
+
+  useEffect(() => {
+    if (session && user) {
+      setAdminMode(session.admins?.find(([_, id]) => id === user.id) !== undefined)
+    }
+
+  }, [session, user])
 
   function hasForfeited() {
     return sendForfeitResult.isSuccess || sendForfeitResult.isLoading
@@ -42,7 +48,7 @@ function MultiView(props: MultiViewProps) {
   }
 
   return (
-    <div className="flex flex-col ml-2">
+    <div className="flex flex-col ml-2 w-full">
       <MultiEventViewer sessionId={sessionId} />
       <div className="flex flex-row space-x-2">
         <Button
@@ -56,7 +62,7 @@ function MultiView(props: MultiViewProps) {
         <PauseReceivingPanel />
         </div>
 
-      {adminMode && <ItemSend sessionId={sessionId} />}
+      {!sessionLoading && adminMode && <ItemSender sessionId={sessionId} />}
 
     </div>
   )

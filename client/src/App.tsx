@@ -1,6 +1,5 @@
 import "./App.css"
-import LandingPage from "./features/multiWorld/landingPage"
-
+import LandingPage from "./features/multiWorld/LandingPage"
 
 const App = () => {
   return (

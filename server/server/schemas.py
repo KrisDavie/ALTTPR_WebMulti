@@ -69,6 +69,7 @@ class User(UserBase):
     colour: str | None = None
     avatar: str | None = None
     discord_username: str | None = None
+    is_superuser: bool = False
 
     class Config:
         from_attributes = True
@@ -160,3 +161,31 @@ class SRAMStore(SRAMStoreBase):
 
     class Config:
         from_attributes = True
+
+class PlayerInfo(BaseModel):
+    playerNumber: int
+    playerName: str
+    collectionRate: int
+    totalLocations: int
+    goalCompleted: bool
+    curCoords: list[int]
+    userId: int | None = None
+
+class Features(BaseModel):
+    chat: bool
+    pauseRecieving: bool
+    missingCmd: bool
+    duping: bool
+
+class MWSessionInfo(BaseModel):
+    id: str
+    players: List[PlayerInfo]
+    status: str
+    owner: tuple[str, int]
+    admins: List[tuple[str, int]] | None = None
+    createdTimestamp: int
+    lastChangeTimestamp: int
+    featureFlags: Features
+    race: bool
+
+    

@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Link, useNavigate } from "react-router-dom"
 
 function UserButton() {
   const user = useAppSelector(state => state.user)
@@ -26,15 +27,16 @@ function UserButton() {
   const [userIdCookie, setUserIdCookie] = useState(Cookies.get("user_id"))
   const [userTypeCookie, setUserTypeCookie] = useState(Cookies.get("user_type"))
   const [modalOpen, setModalOpen] = useState(false)
+  const navigate = useNavigate()
 
   const username = user.username ?? "Guest#" + ("0000" + user.id).slice(-4)
 
   const [authUser, _result] = useAuthUserMutation()
   const [logoutUser] = useLogoutUserMutation()
 
-  const fetchUser = useCallback(async () => {
+  const fetchUser = useCallback(async (authOnly: boolean = false) => {
     try {
-      const payload = await authUser({}).unwrap()
+      const payload = await authUser({authOnly: authOnly}).unwrap()
       dispatch(setUser(payload))
     } catch (error) {
       console.error("rejected", error)
@@ -45,7 +47,7 @@ function UserButton() {
     Cookies.remove("user_id")
     Cookies.remove("session_token")
     Cookies.remove("user_type")
-    fetchUser()
+    fetchUser(false)
   }
 
   // Check for user details when the page loads
@@ -58,7 +60,7 @@ function UserButton() {
     ) {
       return
     }
-    fetchUser()
+    fetchUser(true)
   }, [userIdCookie, userTypeCookie, fetchUser, user.id])
 
   // Check the popup to see when the code has been stored
@@ -73,6 +75,7 @@ function UserButton() {
         return
       }
       try {
+        // @ts-expect-error - We just want to check if the popup actually exists
         const _popupUrl = discordPopup.location.href
       } catch {
         return
@@ -86,7 +89,7 @@ function UserButton() {
         setUserTypeCookie("discord")
         discordPopup.close()
         setDiscordPopup(null)
-        fetchUser()
+        fetchUser(true)
         if (timer) clearInterval(timer)
         }
     }, 1000)
@@ -117,11 +120,17 @@ function UserButton() {
         dispatch(setUser({ id: 0 }))
         setUserIdCookie(undefined)
         setUserTypeCookie(undefined)
+        navigate("/")
       }
     }
+
   }
 
-  const profileItem = <MenubarItem>Profile</MenubarItem>
+  const profileItem = (
+    <Link to="/profile/sessions">
+      <MenubarItem>Profile</MenubarItem>
+    </Link>
+  )
   const createAccountItem = (
     <MenubarItem onClick={createGuestUser}>Create Guest Account</MenubarItem>
   )

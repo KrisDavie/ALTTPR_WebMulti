@@ -4,11 +4,13 @@ import { Provider } from "react-redux"
 import App from "./App"
 import { store } from "./app/store"
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
-import { loader as multiViewLoader } from "./features/multiWorld/multiView"
+import MultiView, { loader as multiViewLoader } from "./features/multiWorld/MultiView"
 
 import "./index.css"
-import MultiView from "./features/multiWorld/multiView"
 import MainLayout from "./features/MainLayout"
+import Dashboard from "./components/dashboard/Dashboard"
+import { loader as dashboardLoader } from "./components/dashboard/dashboardLoader"
+import { MultiworldSessions } from "./components/dashboard/MultiworldSessions"
 
 const router = createBrowserRouter([
   {
@@ -19,16 +21,21 @@ const router = createBrowserRouter([
         path: "/",
         element: <App />,
       },
-
       {
         path: "/multi/:sessionId",
         element: <MultiView />,
         loader: multiViewLoader,
       },
       {
-        path: "/multiAdmin/:sessionId",
-        element: <MultiView adminMode />,
-        loader: multiViewLoader,
+        path: "/profile/",
+        element: <Dashboard />,
+        loader: dashboardLoader,
+        children: [
+          {
+            path: "/profile/sessions",
+            element: <MultiworldSessions />,
+          },
+        ]
       },
     ],
   },

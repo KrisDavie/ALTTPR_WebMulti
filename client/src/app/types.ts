@@ -5,7 +5,7 @@ export interface Event {
   from_player: number
   to_player: number
   frame_time?: number
-  event_data?: object
+  event_data?: {[keys: string]: string}
   session_id?: string
   event_historical?: boolean
 }

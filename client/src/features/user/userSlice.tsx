@@ -5,6 +5,7 @@ export interface UserState {
   username?: string
   discordUsername?: string
   avatar?: string
+  superUser?: boolean
 }
 
 const initialState: UserState = {
@@ -12,6 +13,7 @@ const initialState: UserState = {
   username: undefined,
   discordUsername: undefined,
   avatar: undefined,
+  superUser: false,
 }
 
 export const userSlice = createSlice({
@@ -23,12 +25,15 @@ export const userSlice = createSlice({
       state.username = action.payload.username
       state.discordUsername = action.payload.discord_username
       state.avatar = action.payload.avatar
+      state.superUser = action.payload.is_superuser
+      
     },
     clearUser: state => {
       state.id = 0
       state.username = undefined
       state.discordUsername = undefined
       state.avatar = undefined
+      state.superUser = false
     },
   },
 })

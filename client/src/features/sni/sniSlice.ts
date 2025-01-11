@@ -1,4 +1,4 @@
-import { Event } from "@/app/types"
+import { Event, ItemEvent } from "@/app/types"
 import type { PayloadAction } from "@reduxjs/toolkit"
 import { createSlice } from "@reduxjs/toolkit"
 
@@ -8,7 +8,7 @@ export interface SniSliceState {
   grpcConnected: boolean
   deviceList: string[]
   connectedDevice?: string
-  itemQueue: Event[]
+  itemQueue: ItemEvent[]
 }
 
 const initialState: SniSliceState = {
@@ -30,13 +30,13 @@ export const sniSlice = createSlice({
     setGrpcHost: (state, action: PayloadAction<string>) => {
       state.grpcHost = action.payload
     },
-    addItemsToQueue: (state, action: PayloadAction<string[]>) => {
+    addItemsToQueue: (state, action: PayloadAction<ItemEvent[]>) => {
       state.itemQueue = [...state.itemQueue, ...action.payload].sort(
-        (a: Event, b: Event) =>
+        (a: ItemEvent, b: ItemEvent) =>
           (a.event_idx[0] * 256 +
           a.event_idx[1]) -
           (b.event_idx[0] * 256 + b.event_idx[1]),
-      ).reduce((acc: Event[], x: Event) => {
+      ).reduce((acc: ItemEvent[], x: ItemEvent) => {
         if (!acc.some((item: Event) => item.id === x.id)) {
           acc.push(x)
         }

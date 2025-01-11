@@ -2,8 +2,8 @@ import { useAppSelector } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
-import MultiServer from "./multiServer"
-import MultiClientForm from "./connectForm"
+import MultiServer from "./MultiServer"
+import MultiClientForm from "./MultiForm"
 import { TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Tooltip } from "@radix-ui/react-tooltip"
 
@@ -30,7 +30,7 @@ function LandingPage() {
           A web based server/client for ALTTPR Door Rando multiworlds.
         </p>
       </div>
-      <Separator className="my-4 " />
+      <Separator className="my-4" />
       {selectedMode === "" && (
         <div className="flex flex-row h-5 items-center justify-center space-x-4 text-sm">
           <TooltipProvider>

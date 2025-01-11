@@ -1,3 +1,4 @@
+from collections import defaultdict
 import datetime
 import json
 import logging
@@ -34,6 +35,7 @@ from server.data import data as loc_data
 from server.logging import logging_config
 from server.dependencies import get_db
 
+
 def run_migrations():
     alembic_cfg = Config("alembic.ini")
     command.upgrade(alembic_cfg, "heads")
@@ -46,7 +48,6 @@ async def lifespan(app_: FastAPI):
     run_migrations()
     yield
     logger.info("Shutting down...")
-
 
 
 app = FastAPI(
@@ -113,21 +114,32 @@ def create_guest_user(response: Response, db: Annotated[Session, Depends(get_db)
     )
     return user, token
 
+
 def user_logout(response: Response, unauthorized: bool = False):
     response.delete_cookie("session_token")
     response.delete_cookie("user_id")
     response.delete_cookie("user_type")
     if unauthorized:
-        raise HTTPException(status_code=401, detail="Invalid or Missing Session Token", headers=response.headers)
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or Missing Session Token",
+            headers=response.headers,
+        )
     return response
 
+
 def verify_session_token(
-    response: Response, request: Request, db: Annotated[Session, Depends(get_db)]
+    response: Response,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    auth_only: bool = False,
 ):
     token = request.cookies.get("session_token")
     user_id = request.cookies.get("user_id")
     if not user_id:
-        return create_guest_user(response, db)
+        if not auth_only:
+            return create_guest_user(response, db)
+        return False, False
     if not token:
         return False, False
     user = crud.get_user(db, int(user_id))
@@ -174,7 +186,9 @@ def update_session_token(
 @app.post("/users/auth", response_model=schemas.User)
 def auth_user(
     response: Response,
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
+    auth_only: bool,
     user_info: Annotated[dict, Depends(verify_session_token)],
 ):
     user, token = user_info
@@ -256,8 +270,13 @@ async def discord_auth(
     </html>
     """
 
+
 @app.post("/users/logout")
-def logout_user(response: Response, db: Annotated[Session, Depends(get_db)], user_info: Annotated[dict, Depends(verify_session_token)] = None):
+def logout_user(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[dict, Depends(verify_session_token)] = None,
+):
     user_logout(response)
     user, token = user_info
     crud.remove_user_session_token(db, user.id, token)
@@ -278,8 +297,112 @@ def get_user(
         return crud.get_user(db, user_id)
     if user_id != user.id:
         raise HTTPException(status_code=403, detail="Unauthorized")
-
     return user
+
+
+def get_session_info(
+    db: Annotated[Session, Depends(get_db)], session: schemas.MWSession, user_id: int
+):
+    player_srams = [
+        crud.get_sramstore(db, session.id, x + 1)
+        for x in range(len(session.mwdata["names"][0]))
+    ]
+    last_updated = crud.get_last_event(db, session.id).timestamp.timestamp()
+    if not last_updated:
+        last_updated = session.created_at.timestamp()
+    player_datas = []
+    players_tot_cr = defaultdict(int)
+    for loc in session.mwdata["locations"]:
+        players_tot_cr[loc[0][1]] += 1
+
+    for player_id, (player_name, player_sram) in enumerate(
+        zip(session.mwdata["names"][0], player_srams)
+    ):
+        if not player_sram:
+            cr = 0
+            goal_completed = False
+        else:
+            sram = json.loads(player_sram.sram)
+            cr = int.from_bytes(sram["inventory"][0xE3:0xE5], "little")
+            goal_completed = bool(sram["inventory"][0x103])
+        player_datas.append(
+            schemas.PlayerInfo(
+                playerNumber=player_id + 1,
+                playerName=player_name,
+                collectionRate=cr,
+                totalLocations=players_tot_cr[player_id + 1],
+                goalCompleted=goal_completed,
+                curCoords=[0, 0],
+                userId=None,
+            )
+        )
+    TIME_TO_IDLE = datetime.timedelta(days=2)
+
+    tot_complete = all([x.goalCompleted for x in player_datas])
+    if tot_complete == len(player_datas):
+        status = "completed"
+    elif last_updated <= (datetime.datetime.now() - TIME_TO_IDLE).timestamp():
+        status = "inactive"
+    else:
+        status = "active"
+
+    owners_info = [
+        (x.username if x.username else f"Guest#{x.id:04}", x.id) for x in session.owners
+    ]
+
+    session_model = schemas.MWSessionInfo(
+        id=str(session.id),
+        players=player_datas,
+        status=status,
+        owner=owners_info[0],
+        admins=owners_info,
+        createdTimestamp=int(session.created_at.timestamp() * 1000),
+        lastChangeTimestamp=int(last_updated * 1000),
+        featureFlags=schemas.Features(
+            chat=True,
+            pauseRecieving=True,
+            missingCmd=True,
+            duping=True,
+        ),
+        race=session.tournament,
+    )
+    return session_model
+
+
+@app.get("/session/{mw_session_id}", response_model=schemas.MWSessionInfo)
+def get_session(
+    db: Annotated[Session, Depends(get_db)],
+    mw_session_id: str,
+    user_info: Annotated[dict, Depends(verify_session_token)],
+):
+    user, token = user_info
+    return get_session_info(db, crud.get_session(db, mw_session_id), user.id)
+
+
+@app.get("/users/{user_id}/sessions", response_model=list[schemas.MWSessionInfo])
+def get_user_sessions(
+    db: Annotated[Session, Depends(get_db)],
+    user_id: int,
+    user_info: Annotated[dict, Depends(verify_session_token)],
+):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # TODO support public profiles
+    if user.id != user_id and not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if user.is_superuser:
+        all_sessions = sorted(crud.get_sessions(db), key=lambda x: x.created_at)
+    else:
+        all_sessions = sorted(
+            crud.get_user_sessions(db, user.id), key=lambda x: x.created_at
+        )
+    sessions = []
+    for session in all_sessions:
+        sessions.append(get_session_info(db, session, user.id))
+    return sessions
 
 
 @app.post("/multidata")
@@ -346,7 +469,7 @@ def create_multi_session(
 def get_session_events(
     mw_session_id: str, db: Annotated[Session, Depends(get_db)]
 ) -> list[schemas.Event]:
-    all_events = crud.get_all_events(db, session_id=mw_session_id)
+    all_events = crud.get_events(db, session_id=mw_session_id)
     for event in all_events:
         if event.event_type == models.EventTypes.new_item:
             if event.event_data == None:
@@ -369,13 +492,21 @@ def get_session_players(
     return session.mwdata["names"][0]
 
 
-@app.post("/admin/{mw_session_id}/send")
+@app.post("/session/{mw_session_id}/adminSend")
 def admin_send_event(
     mw_session_id: str,
     send_data: dict,
     db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[dict, Depends(verify_session_token)],
 ):
     session = crud.get_session(db, mw_session_id)
+    user, token = user_info
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if user.id not in [x.id for x in session.owners] and not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
     if not session:
         return {"error": "Session not found"}
     if session.session_password != None:

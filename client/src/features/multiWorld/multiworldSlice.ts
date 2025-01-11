@@ -6,7 +6,7 @@ export interface MemoryType {
   [key: string]: number[]
 }
 
-type SliceState = {
+export interface MultiworldSliceState {
   sessionId: string
   password: string
   events: Event[]
@@ -19,7 +19,7 @@ type SliceState = {
   sram_updating_on_server: boolean
 }
 
-const initialState: SliceState = {
+const initialState: MultiworldSliceState = {
   sessionId: "",
   password: "",
   events: [],
@@ -41,7 +41,7 @@ export const multiworldSlice = createSlice({
     disconnect: () => {},
     reconnect: () => {},
     sendPlayerInfo: () => {},
-    sendChatMessage: () => {},
+    sendChatMessage: (_state, _action) => {},
     setSession: (state, action) => {
       state.sessionId = action.payload.sessionId
       state.password = action.payload.password || ""

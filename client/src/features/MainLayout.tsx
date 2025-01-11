@@ -7,7 +7,9 @@ function MainLayout() {
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <div className="flex flex-col h-screen">
         <Header />
-        <Outlet />
+        <div className="flex flex-1 overflow-y-auto">
+          <Outlet />
+        </div>
       </div>
     </ThemeProvider>
 

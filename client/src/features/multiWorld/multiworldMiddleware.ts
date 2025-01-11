@@ -16,7 +16,7 @@ import { log } from "../loggerSlice"
 
 import type { RootState } from "@/app/store"
 import { addItemsToQueue } from "../sni/sniSlice"
-import { Event } from "@/app/types"
+import { Event, ItemEvent } from "@/app/types"
 
 const types_to_adjust = [
   "new_items",
@@ -143,10 +143,10 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
           case "new_items": {
             const sorted_data = data.data
               .filter(
-                (item: Event) => item.event_idx && item.event_idx.length == 2,
+                (item: ItemEvent) => item.event_idx && item.event_idx.length == 2,
               )
               .sort(
-                (a: Event, b: Event) =>
+                (a: ItemEvent, b: ItemEvent) =>
                   a.event_idx[0] * 256 +
                   a.event_idx[1] -
                   (b.event_idx[0] * 256 + b.event_idx[1]),
