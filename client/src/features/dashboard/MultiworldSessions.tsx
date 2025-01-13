@@ -30,7 +30,7 @@ import {
 import { CheckIcon, XIcon } from "lucide-react"
 import { useGetAllSessionsQuery } from "@/features/api/apiSlice"
 import { useAppSelector } from "@/app/hooks"
-import { LoadingSpinner } from "../ui/spinner"
+import { LoadingSpinner } from "../../components/ui/spinner"
 
 interface IPlayer {
   playerNumber: number

@@ -29,3 +29,11 @@ export enum EventTypes {
   player_pause_receive = 9,
   player_resume_receive = 10,
 }
+
+export interface APIKey {
+  id: number
+  user_id: number
+  key: string
+  created_at: string
+  last_used: string
+}

@@ -14,6 +14,7 @@ from authlib.integrations.base_client.errors import OAuthError
 from contextlib import asynccontextmanager
 from cryptography.fernet import Fernet
 from fastapi import (
+    Body,
     Depends,
     FastAPI,
     HTTPException,
@@ -133,9 +134,22 @@ def verify_session_token(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
     auth_only: bool = False,
-):
+) -> tuple[models.User, str]:
+    # TODO: Confirm we don't have auth headers in other use cases
+    if "Authorization" in request.headers:
+        auth_type, token = request.headers["Authorization"].split(" ")
+        if auth_type.lower() != "bearer":
+            return False, False
+        
+        user = crud.get_user_by_api_key(db, token)
+        if not user:
+            return False, False
+        updated_token = crud.update_api_key_used(db, token)
+        return user, updated_token
+
     token = request.cookies.get("session_token")
     user_id = request.cookies.get("user_id")
+
     if not user_id:
         if not auth_only:
             return create_guest_user(response, db)
@@ -183,17 +197,152 @@ def update_session_token(
     return user, token
 
 
+@app.post("/users/bot")
+def create_bot(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+    request_body: Annotated[dict, Body()],
+):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if len(user.bots) >= 3 and not user.is_superuser:
+        raise HTTPException(status_code=403, detail="Too many bots")
+    if not user.discord_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    if 'bot_name' in request_body:
+        existing_user = crud.get_user_by_username(db, request_body['bot_name'])
+        if existing_user:
+            raise HTTPException(status_code=409, detail="Username already exists")
+        
+    bot = crud.create_user(
+        db, schemas.UserCreate(bot=True, session_tokens=[], bot_owner_id=user.id)
+    )
+    bot_name = request_body.get("bot_name", f"Bot#{bot.id:04}")
+    bot = crud.set_bot_username(db, bot.id, bot_name)
+    return bot
+
+@app.delete("/users/bot/{bot_id}")
+def delete_bot(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    bot_id: int,
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    bot = crud.get_user(db, bot_id)
+
+    if not user.is_superuser and user.id != bot.bot_owner_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    success = crud.delete_bot(db, bot_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    return {"message": "Bot removed"}
+
+
+@app.post("/users/bot/{bot_id}/api_key")
+def create_apikey(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    bot_id: int,
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+    description: str = None,
+):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    bot = crud.get_user(db, bot_id)
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    if not bot.bot:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if not user.is_superuser and user.id != bot.bot_owner_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    apikey = crud.add_api_key(
+        db,
+        owner_id=user.id,
+        user_id=bot_id,
+        api_key=schemas.APIKeyCreate(
+            key=secrets.token_urlsafe(32), description='test_description'
+        ),
+    )
+    return apikey
+
+
+@app.delete("/users/bot/{bot_id}/api_key/{apikey_id}")
+def delete_apikey(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    bot_id: int,
+    apikey_id: int,
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+):
+    user, token = user_info
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    bot = crud.get_user(db, bot_id)
+
+    if not bot:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    if not bot.bot:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if not user.is_superuser and user.id != bot.bot_owner_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    success = crud.revoke_api_key(db, user.id, bot.id, apikey_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="API Key not found")
+    return {"message": "API Key removed"}
+
+
 @app.post("/users/auth", response_model=schemas.User)
 def auth_user(
     response: Response,
     request: Request,
     db: Annotated[Session, Depends(get_db)],
     auth_only: bool,
-    user_info: Annotated[dict, Depends(verify_session_token)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+):
+    user, token = user_info
+    if (user.discord_id and not user.discord_display_name):
+        user.discord_display_name = user.username
+        user = crud.update_user(db, user.id, user)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
+@app.post("/users/update", response_model=schemas.User)
+def set_username(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+    username: str = Body(None),
+    username_as_player_name: bool = Body(None),
+
 ):
     user, token = user_info
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    if username is not None:
+        existing_user = crud.get_user_by_username(db, username)
+        if existing_user:
+            raise HTTPException(status_code=409, detail="Username already exists")
+        user.username = username
+    if username_as_player_name is not None:
+        user.username_as_player_name = username_as_player_name
+
+    user = crud.update_user(db, user.id, user)
     return user
 
 
@@ -232,9 +381,8 @@ async def discord_auth(
     # User hasn't logged in before
     if not user:
         user, token = create_guest_user(response, db)
-    # User was a guest previously
-    if user.email != discord_user["email"]:
-        user = crud.update_discord_user(db, user.id, discord_user)
+
+    user = crud.update_discord_user(db, user.id, discord_user)
 
     if not token:
         token = fernet.encrypt(secrets.token_urlsafe(16).encode()).decode()
@@ -275,7 +423,7 @@ async def discord_auth(
 def logout_user(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
-    user_info: Annotated[dict, Depends(verify_session_token)] = None,
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
 ):
     user_logout(response)
     user, token = user_info
@@ -288,7 +436,7 @@ def get_user(
     response: Response,
     user_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user_info: Annotated[dict, Depends(verify_session_token)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
     user, token = user_info
     if not user:
@@ -373,7 +521,7 @@ def get_session_info(
 def get_session(
     db: Annotated[Session, Depends(get_db)],
     mw_session_id: str,
-    user_info: Annotated[dict, Depends(verify_session_token)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
     user, token = user_info
     return get_session_info(db, crud.get_session(db, mw_session_id), user.id)
@@ -383,7 +531,7 @@ def get_session(
 def get_user_sessions(
     db: Annotated[Session, Depends(get_db)],
     user_id: int,
-    user_info: Annotated[dict, Depends(verify_session_token)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
     user, token = user_info
     if not user:
@@ -412,7 +560,7 @@ def create_multi_session(
     db: Annotated[Session, Depends(get_db)],
     file_size: Annotated[int, Depends(valid_content_length)],
     password: Annotated[str, Form()] = None,
-    user_info: Annotated[dict, Depends(verify_session_token)] = None,
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
 ):
     # Accept form multi-data
 
@@ -497,7 +645,7 @@ def admin_send_event(
     mw_session_id: str,
     send_data: dict,
     db: Annotated[Session, Depends(get_db)],
-    user_info: Annotated[dict, Depends(verify_session_token)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
     session = crud.get_session(db, mw_session_id)
     user, token = user_info

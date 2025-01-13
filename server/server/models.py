@@ -42,7 +42,7 @@ class Log(Base):
     player_id = Column(Integer, index=True, nullable=True)
     content = Column(String)
     session = relationship("MWSession", back_populates="logs")
-    
+
 
 class User(Base):
     __tablename__ = "users"
@@ -52,27 +52,54 @@ class User(Base):
     session_tokens = Column(ARRAY(String), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_superuser = Column(Boolean, default=False)
+    bot = Column(Boolean, default=False)
+    username_as_player_name = Column(Boolean, default=False)
+    
 
     # Discord fields
     discord_id = Column(String, index=True, nullable=True)
     discord_username = Column(String, index=True, nullable=True)
-    username = Column(String, index=True, nullable=True)
+    discord_display_name = Column(String, nullable=True)
+    username = Column(String, index=True, nullable=True, unique=True)
     avatar = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=True)
     refresh_token = Column(String, nullable=True)
-    
+
     # Custom fields
     supporter = Column(Boolean, default=False)
     colour = Column(String, nullable=True)
-    
-    sessions = relationship("MWSession", secondary="user_sessions", back_populates="users")
-    owned_sessions = relationship("MWSession", secondary="owned_sessions", back_populates="owners")
+
+    sessions = relationship(
+        "MWSession", secondary="user_sessions", back_populates="users"
+    )
+    owned_sessions = relationship(
+        "MWSession", secondary="owned_sessions", back_populates="owners"
+    )
     events = relationship("Event", back_populates="user")
     sramstores = relationship("SRAMStore", back_populates="user")
-    child_accounts = relationship("User", back_populates="parent_account")
     parent_account_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    parent_account = relationship("User", back_populates="child_accounts", remote_side=[id])
-    
+    child_accounts = relationship("User", back_populates="parent_account", foreign_keys=[parent_account_id])
+    parent_account = relationship(
+        "User", back_populates="child_accounts", foreign_keys=[parent_account_id], remote_side=[id]
+    )
+
+    bot_owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    bot_owner = relationship("User", back_populates="bots", foreign_keys=[bot_owner_id], remote_side=[id])
+    bots = relationship("User", back_populates="bot_owner", foreign_keys=[bot_owner_id])
+    api_keys = relationship("APIKey", back_populates="user", cascade="all, delete-orphan")
+
+
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="api_keys")
 
 
 class MWSession(Base):
@@ -85,7 +112,9 @@ class MWSession(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     tournament = Column(Boolean, default=False)
-    owners = relationship("User", secondary="owned_sessions", back_populates="owned_sessions")
+    owners = relationship(
+        "User", secondary="owned_sessions", back_populates="owned_sessions"
+    )
 
     mwdata = Column(JSON)
 
@@ -99,13 +128,19 @@ class MWSession(Base):
 class UserSessions(Base):
     __tablename__ = "user_sessions"
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"), primary_key=True)
+    session_id = Column(
+        UUID(as_uuid=True), ForeignKey("mwsessions.id"), primary_key=True
+    )
+    player_id = Column(Integer, nullable=True)
 
 
 class OwnedSessions(Base):
     __tablename__ = "owned_sessions"
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"), primary_key=True)
+    session_id = Column(
+        UUID(as_uuid=True), ForeignKey("mwsessions.id"), primary_key=True
+    )
+
 
 class Game(Base):
     __tablename__ = "games"
@@ -136,7 +171,11 @@ class Event(Base):
 
     session = relationship("MWSession", back_populates="events")
     user = relationship("User", back_populates="events")
-    __table_args__ = (UniqueConstraint("session_id", "to_player", "to_player_idx", name="player_receive_index"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "to_player", "to_player_idx", name="player_receive_index"
+        ),
+    )
 
 
 class SRAMStore(Base):

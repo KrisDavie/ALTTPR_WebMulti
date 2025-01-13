@@ -1,7 +1,8 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react"
-import { Event } from "@/app/types"
+import { APIKey, Event } from "@/app/types"
 import { EventTypes } from "@/app/types"
-import { ISession } from "@/components/dashboard/MultiworldSessions"
+import { ISession } from "@/features/dashboard/MultiworldSessions"
+import { UserState } from "../user/userSlice"
 
 const baseUrl = "/api/v1"
 
@@ -24,13 +25,14 @@ export const apiSlice = createApi({
       },
       invalidatesTags: ["Sessions"],
     }),
-    authUser: builder.mutation({
+    authUser: builder.query({
       query: ({ authOnly }) => {
         return {
           url: `/users/auth?auth_only=${authOnly}`,
           method: "POST",
         }
       },
+      providesTags: ["User"],
     }),
     logoutUser: builder.mutation({
       query: () => {
@@ -40,6 +42,68 @@ export const apiSlice = createApi({
         }
       },
       invalidatesTags: ["User", "Sessions"],
+    }),
+    updateUser: builder.mutation({
+      query: ({
+        username,
+        usernameAsPlayerName,
+      }: {
+        username: string 
+        usernameAsPlayerName: boolean
+      }) => {
+        let body = {}
+        if (username !== "") {
+          body = {username: username}
+        }
+        if (usernameAsPlayerName !== undefined) {
+          body = {...body, username_as_player_name: usernameAsPlayerName}
+        }
+        return {
+          url: "/users/update",
+          method: "POST",
+          body: body,
+        }
+      },
+      invalidatesTags: ["User"],
+    }),
+    createBot: builder.mutation<UserState, string>({
+      query: botName => {
+        return {
+          url: "/users/bot",
+          method: "POST",
+          body: {
+            bot_name: botName,
+          },
+        }
+      },
+      invalidatesTags: ["User"],
+    }),
+    createApiKey: builder.mutation<APIKey, number>({
+      query: botId => {
+        return {
+          url: `/users/bot/${botId}/api_key`,
+          method: "POST",
+        }
+      },
+      invalidatesTags: ["User"],
+    }),
+    deleteBot: builder.mutation({
+      query: botId => {
+        return {
+          url: `/users/bot/${botId}`,
+          method: "DELETE",
+        }
+      },
+      invalidatesTags: ["User"],
+    }),
+    revokeApiKey: builder.mutation({
+      query: ({ botId, apiKeyId }: { botId: number; apiKeyId: number }) => {
+        return {
+          url: `/users/bot/${botId}/api_key/${apiKeyId}`,
+          method: "DELETE",
+        }
+      },
+      invalidatesTags: ["User"],
     }),
     getSessionEvents: builder.query({
       query: sessionId => `/session/${sessionId}/events`,
@@ -59,7 +123,7 @@ export const apiSlice = createApi({
       providesTags: ["Sessions"],
       transformResponse: (response: ISession[]) => {
         return response.sort((a, b) => b.createdTimestamp - a.createdTimestamp)
-      }
+      },
     }),
     getSession: builder.query<ISession, string>({
       query: sessionId => `/session/${sessionId}`,
@@ -68,8 +132,7 @@ export const apiSlice = createApi({
       query: ({ sessionId, player_id, message }) => ({
         url: `/session/${sessionId}/log`,
         method: "POST",
-        body: { player_id: player_id,
-                message: message },
+        body: { player_id: player_id, message: message },
       }),
     }),
     sendForfeit: builder.mutation({
@@ -79,12 +142,6 @@ export const apiSlice = createApi({
         body: {
           player_id: playerId,
         },
-      }),
-    }),
-    startDebug: builder.mutation({
-      query: ({ sessionId, numItems }) => ({
-        url: `/session/${sessionId}/debug/${numItems}`,
-        method: "POST",
       }),
     }),
     sendNewItems: builder.mutation({
@@ -114,14 +171,18 @@ export const apiSlice = createApi({
 
 export const {
   useUploadMultiDataMutation,
-  useStartDebugMutation,
   useSendForfeitMutation,
   useSendLogMessageMutation,
   useGetPlayersQuery,
   useGetSessionQuery,
   useGetAllSessionsQuery,
   useLazyGetPlayersQuery,
-  useAuthUserMutation,
+  useLazyAuthUserQuery,
+  useCreateBotMutation,
+  useCreateApiKeyMutation,
+  useDeleteBotMutation,
+  useRevokeApiKeyMutation,
+  useUpdateUserMutation,
   useLogoutUserMutation,
   useGetSessionEventsQuery,
   useSendNewItemsMutation,

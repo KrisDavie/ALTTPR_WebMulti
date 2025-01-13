@@ -45,11 +45,13 @@ class DiscordAPIUser(BaseModel):
     refresh_token: str | None = None
 
 class UserBase(BaseModel):
-    session_tokens: list[str]
+    bot: bool = False
+    bot_owner_id: int | None = None
     pass
 
 
 class UserCreate(UserBase):
+    session_tokens: list[str]
     pass
 
 
@@ -69,7 +71,31 @@ class User(UserBase):
     colour: str | None = None
     avatar: str | None = None
     discord_username: str | None = None
+    discord_display_name: str | None = None
     is_superuser: bool = False
+    username_as_player_name: bool = False
+    bots: List["User"] = []
+    api_keys: List["APIKey"] = []
+
+    class Config:
+        from_attributes = True
+
+
+class APIKeyBase(BaseModel):
+    description: str | None = None
+
+
+class APIKeyCreate(APIKeyBase):
+    key: str
+    pass
+
+
+class APIKey(APIKeyBase):
+    id: int
+    user_id: int
+    created_at: datetime.datetime
+    last_used: datetime.datetime
+
 
     class Config:
         from_attributes = True

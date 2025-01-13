@@ -8,9 +8,11 @@ import MultiView, { loader as multiViewLoader } from "./features/multiWorld/Mult
 
 import "./index.css"
 import MainLayout from "./features/MainLayout"
-import Dashboard from "./components/dashboard/Dashboard"
-import { loader as dashboardLoader } from "./components/dashboard/dashboardLoader"
-import { MultiworldSessions } from "./components/dashboard/MultiworldSessions"
+import Dashboard from "./features/dashboard/Dashboard"
+import { loader as dashboardLoader } from "./features/dashboard/dashboardLoader"
+import { MultiworldSessions } from "./features/dashboard/MultiworldSessions"
+import UserProfile from "./features/dashboard/UserProfile"
+import Bots from "./features/dashboard/Bots"
 
 const router = createBrowserRouter([
   {
@@ -35,6 +37,15 @@ const router = createBrowserRouter([
             path: "/profile/sessions",
             element: <MultiworldSessions />,
           },
+          {
+            path: "/profile/settings",
+            element: <UserProfile />,
+          },
+          {
+            path: "/profile/bots",
+            element: <Bots />,
+          }
+          
         ]
       },
     ],

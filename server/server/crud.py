@@ -2,7 +2,7 @@ import json
 import logging
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as postgres_upsert
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from . import models, schemas
 
@@ -27,6 +27,42 @@ def create_user(db: Session, user: schemas.UserCreate):
     return db_user
 
 
+def set_bot_username(db: Session, user_id: int, username: str):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_user.username = username
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def update_user(db: Session, user_id: int, user: schemas.User):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_user.username = user.username
+    db_user.email = user.email
+    db_user.supporter = user.supporter
+    db_user.colour = user.colour
+    db_user.avatar = user.avatar
+    db_user.discord_username = user.discord_username
+    db_user.discord_display_name = user.discord_display_name
+    db_user.is_superuser = user.is_superuser
+    db_user.username_as_player_name = user.username_as_player_name
+    db_user.bots = user.bots
+    db_user.api_keys = user.api_keys
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+def update_user_discord_display_name(db: Session, user_id: int, display_name: str):
+    """
+    This is a migration function to update the discord display name for a user after we added the ability to change usernames
+    """
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_user.discord_display_name = display_name
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
 def update_discord_user(
     db: Session, user_id: int, discord_user: schemas.DiscordAPIUser
 ):
@@ -37,9 +73,29 @@ def update_discord_user(
     )
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
 
+    if existing_discord_user == db_user:
+        # Just need to update user details from discord
+        db_user.discord_display_name = discord_user["global_name"]
+        db_user.avatar = discord_user["avatar"]
+        db_user.email = discord_user["email"]
+        db_user.discord_username = discord_user["username"]
+        db_user.refresh_token = discord_user["refresh_token"]
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+
     # If the user hasn't logged in before
     if not existing_discord_user:
-        db_user.username = discord_user["global_name"]
+        existing_username_user = (
+            db.query(models.User)
+            .filter(models.User.username == discord_user["global_name"])
+            .count()
+        )
+        if existing_username_user > 0:
+            db_user.username = discord_user["username"]
+        else:
+            db_user.username = discord_user["global_name"]
+        db_user.discord_display_name = discord_user["global_name"]
         db_user.avatar = discord_user["avatar"]
         db_user.email = discord_user["email"]
         db_user.discord_username = discord_user["username"]
@@ -54,7 +110,7 @@ def update_discord_user(
 
     # If the user _has_ logged in before
     # Update user details from discord and assign parent ID
-    existing_discord_user.username = discord_user["global_name"]
+    existing_discord_user.discord_display_name = discord_user["global_name"]
     existing_discord_user.avatar = discord_user["avatar"]
     existing_discord_user.email = discord_user["email"]
     existing_discord_user.discord_username = discord_user["username"]
@@ -96,13 +152,100 @@ def update_user_session_token(
     return db_user
 
 
+def add_api_key(
+    db: Session, owner_id: int, user_id: int, api_key: schemas.APIKeyCreate
+):
+    db_owner = db.query(models.User).filter(models.User.id == owner_id).first()
+    if not db_owner:
+        raise Exception("Owner not found")
+    if (
+        user_id not in [owner_id] + [x.id for x in db_owner.bots]
+        and not db_owner.is_superuser
+    ):
+        raise Exception("Authorization error")
+
+    db_api = models.APIKey(**api_key.model_dump(), user_id=user_id)
+    db.add(db_api)
+    db.commit()
+    db.refresh(db_api)
+    return db_api
+
+
+def update_api_key_used(db: Session, api_key: str):
+    db_api = db.query(models.APIKey).filter(models.APIKey.key == api_key).first()
+    db_api.last_used = func.now()
+    db.commit()
+    db.refresh(db_api)
+    return db_api
+
+
+def revoke_api_key(db: Session, owner_id: int, bot_id: int, api_key_id: int):
+    db_owner = db.query(models.User).filter(models.User.id == owner_id).first()
+    if not db_owner:
+        raise Exception("Owner not found")
+    if (
+        bot_id not in [owner_id] + [x.id for x in db_owner.bots]
+        and not db_owner.is_superuser
+    ):
+        raise Exception("Authorization error")
+
+    db_api = db.query(models.APIKey).filter(models.APIKey.id == api_key_id).first()
+    db.delete(db_api)
+    db.commit()
+    return True
+
+
+def get_user_by_api_key(db: Session, api_key: str):
+    return (
+        db.query(models.User)
+        .filter(models.User.api_keys.any(models.APIKey.key == api_key))
+        .first()
+    )
+
+
+def delete_bot(db: Session, bot_id: int):
+    db_bot = db.query(models.User).filter(models.User.id == bot_id).first()
+    if not db_bot:
+        return False
+    db_bot.parent_account_id = None
+    db_bot.bot_owner_id = None
+
+    for apikey in db_bot.api_keys:
+        db.delete(apikey)
+
+    db.commit()
+    db.refresh(db_bot)
+    return True
+
+
+def delete_user(db: Session, user_id: int):
+    # We're not going to delete the user, but we will purge all of their data
+    # We also need to store a record that this user was deleted
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        return False
+
+    db_user.session_tokens = []
+    db_user.email = None
+    db_user.username = None
+    db_user.avatar = None
+    db_user.discord_id = None
+    db_user.discord_username = None
+    db_user.discord_display_name = None
+    db_user.refresh_token = None
+    db_user.username_as_player_name = False
+    db_user.supporter = False
+    db_user.colour = None
+    return True
+
+
 def remove_user_session_token(db: Session, user_id: int, session_token: str):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if session_token in db_user.session_tokens:
         db_user.session_tokens.remove(session_token)
     db.commit()
     db.refresh(db_user)
-    return db_user
+    return
 
 
 def get_games(db: Session, skip: int = 0, limit: int = 0):
@@ -113,6 +256,10 @@ def get_games(db: Session, skip: int = 0, limit: int = 0):
 
 def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def get_user_by_username(db: Session, username: str):
+    return db.query(models.User).filter(models.User.username == username).first()
 
 
 def get_user_by_email(db: Session, email: str):

@@ -9,36 +9,51 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAppSelector } from "@/app/hooks"
+import { Link, useLocation } from "react-router-dom"
 
-const data = {
-  navMain: [
-    {
-      title: "Multiworlds",
-      items: [
-        {
-          title: "Sessions",
-          url: "/profile/sessions",
-          isActive: true,
-        },
-      ],
-    },
-  ],
-}
+const navMain = [
+  {
+    title: "Account",
+    url: "#",
+    admin: false,
+    items: [
+      {
+        title: "Account Settings",
+        url: "/profile/settings",
+      },
+      {
+        title: "Sessions",
+        url: "/profile/sessions",
+      },
+      {
+        title: "Bots",
+        url: "/profile/bots",
+      },
+    ],
+  },
+]
 
-export function ProfileSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function ProfileSidebar({
+  ...props
+}: React.ComponentProps<typeof Sidebar>) {
+  // url
+  const user = useAppSelector(state => state.user)
+  const location = useLocation()
   return (
     <Sidebar {...props}>
       <SidebarContent>
-        {/* We create a SidebarGroup for each parent. */}
-        {data.navMain.map((item) => (
+        {navMain.filter(
+          item => item.admin === user.superUser || item.admin === false
+        ).map(item => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.map((item) => (
+                {item.items.map(item => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={item.isActive}>
-                      <a href={item.url}>{item.title}</a>
+                    <SidebarMenuButton asChild isActive={location.pathname === item.url}>
+                      <Link to={item.url}>{item.title}</Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -47,7 +62,6 @@ export function ProfileSidebar({ ...props }: React.ComponentProps<typeof Sidebar
           </SidebarGroup>
         ))}
       </SidebarContent>
-      {/* <SidebarRail /> */}
     </Sidebar>
   )
 }

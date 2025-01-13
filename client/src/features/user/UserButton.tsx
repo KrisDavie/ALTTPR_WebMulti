@@ -7,7 +7,7 @@ import {
   Menubar,
   MenubarItem,
 } from "@/components/ui/menubar"
-import { useAuthUserMutation, useLogoutUserMutation } from "../api/apiSlice"
+import { useLazyAuthUserQuery, useLogoutUserMutation } from "../api/apiSlice"
 import { setUser } from "./userSlice"
 import { useEffect, useState, useCallback } from "react"
 import Cookies from "js-cookie"
@@ -26,12 +26,16 @@ function UserButton() {
   const [discordPopup, setDiscordPopup] = useState<Window | null>(null)
   const [userIdCookie, setUserIdCookie] = useState(Cookies.get("user_id"))
   const [userTypeCookie, setUserTypeCookie] = useState(Cookies.get("user_type"))
+  const [username, setUsername] = useState<string>("")
   const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate()
 
-  const username = user.username ?? "Guest#" + ("0000" + user.id).slice(-4)
+  useEffect(() => {
+    setUsername(user.username ?? "Guest#" + ("0000" + user.id).slice(-4))
+  }, [user])
 
-  const [authUser, _result] = useAuthUserMutation()
+
+  const [authUser, _result] = useLazyAuthUserQuery()
   const [logoutUser] = useLogoutUserMutation()
 
   const fetchUser = useCallback(async (authOnly: boolean = false) => {
@@ -127,7 +131,7 @@ function UserButton() {
   }
 
   const profileItem = (
-    <Link to="/profile/sessions">
+    <Link to="/profile/settings">
       <MenubarItem>Profile</MenubarItem>
     </Link>
   )
