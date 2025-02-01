@@ -121,9 +121,12 @@ function MultiEventViewer(props: MultiEventViewerProps) {
   }
 
   function handleChatSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    if (!chatMessage) {
+      return
+    }
     dispatch(sendChatMessage({ message: chatMessage }))
     setChatMessage("")
-    event.preventDefault()
   }
 
   const allEventsFiltered = () => {
