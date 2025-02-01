@@ -202,7 +202,7 @@ def create_bot(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
-    request_body: Annotated[dict, Body()],
+    bot_name: Annotated[str, Body()] = "",
 ):
     user, token = user_info
     if not user:
@@ -211,15 +211,15 @@ def create_bot(
         raise HTTPException(status_code=403, detail="Too many bots")
     if not user.discord_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
-    if 'bot_name' in request_body:
-        existing_user = crud.get_user_by_username(db, request_body['bot_name'])
+    if bot_name != "":
+        existing_user = crud.get_user_by_username(db, bot_name)
         if existing_user:
             raise HTTPException(status_code=409, detail="Username already exists")
         
     bot = crud.create_user(
         db, schemas.UserCreate(bot=True, session_tokens=[], bot_owner_id=user.id)
     )
-    bot_name = request_body.get("bot_name", f"Bot#{bot.id:04}")
+    bot_name = bot_name if bot_name != "" else f"Bot#{bot.id:04}"
     bot = crud.set_bot_username(db, bot.id, bot_name)
     return bot
 

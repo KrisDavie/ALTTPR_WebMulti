@@ -1,4 +1,4 @@
-import { useAppDispatch, useAppSelector } from "@/app/hooks"
+import { useAppSelector, useFetchUser } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -16,11 +16,9 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { Checkbox } from "../../components/ui/checkbox"
 import {
-  useLazyAuthUserQuery,
   useUpdateUserMutation,
 } from "@/features/api/apiSlice"
-import { useCallback, useEffect } from "react"
-import { setUser } from "@/features/user/userSlice"
+import {  useEffect } from "react"
 
 const formSchema = z.object({
   username: z
@@ -41,22 +39,11 @@ export default function UserProfile() {
   const defaultUsername =
     user.discordDisplayName === user.username ? "" : user.username
 
-  const [updateUser, { isLoading: isUpdatingUser }] = useUpdateUserMutation()
-  const [authUser, _result] = useLazyAuthUserQuery()
+  const [updateUser] = useUpdateUserMutation()
 
-  const dispatch = useAppDispatch()
 
-  const fetchUser = useCallback(
-    async (authOnly: boolean = false) => {
-      try {
-        const payload = await authUser({ authOnly: authOnly }).unwrap()
-        dispatch(setUser(payload))
-      } catch (error) {
-        console.error("rejected", error)
-      }
-    },
-    [authUser, dispatch],
-  )
+  const { fetchUser } = useFetchUser()
+
 
   useEffect(() => {
     fetchUser(true)

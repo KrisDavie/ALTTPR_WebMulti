@@ -92,7 +92,7 @@ function MultiEventText(props: MultiEventTextProps) {
   ]
 
   let final_content: JSX.Element | null = null
-  let key = event.id
+  let key: number | string = event.id
 
   switch (event_type) {
     case "init_success":

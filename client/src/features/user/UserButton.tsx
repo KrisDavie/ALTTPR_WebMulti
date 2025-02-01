@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { useAppSelector, useAppDispatch } from "@/app/hooks"
+import { useAppSelector, useAppDispatch, useFetchUser } from "@/app/hooks"
 import {
   MenubarContent,
   MenubarMenu,
@@ -7,9 +7,9 @@ import {
   Menubar,
   MenubarItem,
 } from "@/components/ui/menubar"
-import { useLazyAuthUserQuery, useLogoutUserMutation } from "../api/apiSlice"
+import { useLogoutUserMutation } from "../api/apiSlice"
 import { setUser } from "./userSlice"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import Cookies from "js-cookie"
 import {
   Dialog,
@@ -35,17 +35,10 @@ function UserButton() {
   }, [user])
 
 
-  const [authUser, _result] = useLazyAuthUserQuery()
   const [logoutUser] = useLogoutUserMutation()
 
-  const fetchUser = useCallback(async (authOnly: boolean = false) => {
-    try {
-      const payload = await authUser({authOnly: authOnly}).unwrap()
-      dispatch(setUser(payload))
-    } catch (error) {
-      console.error("rejected", error)
-    }
-  }, [authUser, dispatch])
+  const { fetchUser } = useFetchUser()
+
 
   async function createGuestUser() {
     Cookies.remove("user_id")

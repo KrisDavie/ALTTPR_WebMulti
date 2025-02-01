@@ -1,15 +1,13 @@
-import { useAppDispatch, useAppSelector } from "@/app/hooks"
+import { useAppSelector, useFetchUser } from "@/app/hooks"
 import {
   useCreateApiKeyMutation,
   useCreateBotMutation,
   useDeleteBotMutation,
-  useLazyAuthUserQuery,
   useRevokeApiKeyMutation,
 } from "@/features/api/apiSlice"
 import { Button } from "../../components/ui/button"
 import { Separator } from "../../components/ui/separator"
-import { useCallback, useEffect, useState } from "react"
-import { setUser } from "@/features/user/userSlice"
+import { useEffect, useState } from "react"
 import { Input } from "../../components/ui/input"
 import {
   AlertDialog,
@@ -24,7 +22,6 @@ import {
 
 function Bots() {
   const user = useAppSelector(state => state.user)
-  const dispatch = useAppDispatch()
   const [
     createBot,
     { isLoading: isCreatingBot, data: newBotData, error: botError },
@@ -37,23 +34,11 @@ function Bots() {
 
   const [botUsername, setBotUsername] = useState("")
 
-  const [authUser, _result] = useLazyAuthUserQuery()
-
   const [open, setOpen] = useState<boolean>(false)
   const [selected, setSelected] = useState<"" | "bot" | "api_key">("")
   const [alertFunction, setAlertFunction] = useState<(() => void) | null>(null)
 
-  const fetchUser = useCallback(
-    async (authOnly: boolean = false) => {
-      try {
-        const payload = await authUser({ authOnly: authOnly }).unwrap()
-        dispatch(setUser(payload))
-      } catch (error) {
-        console.error("rejected", error)
-      }
-    },
-    [authUser, dispatch],
-  )
+  const { fetchUser } = useFetchUser()
 
   const handleCreateBot = async (botName: string) => {
     try {
