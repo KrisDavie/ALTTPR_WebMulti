@@ -173,7 +173,7 @@ def add_api_key(
 
 def update_api_key_used(db: Session, api_key: str):
     db_api = db.query(models.APIKey).filter(models.APIKey.key == api_key).first()
-    db_api.last_used = func.now()
+    db_api.last_used = func.clock_timestamp()
     db.commit()
     db.refresh(db_api)
     return db_api
