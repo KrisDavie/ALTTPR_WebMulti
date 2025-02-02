@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 from sqlalchemy.orm import Session
@@ -596,7 +597,7 @@ def update_sramstore(db: Session, sramstore: schemas.SRAMStoreCreate):
             raise Exception("SRAMStore not found")
         db_sramstore.prev_sram = db_sramstore.sram
         db_sramstore.sram = sramstore.sram
-        db_sramstore.updated_at = sramstore.updated_at
+        db_sramstore.updated_at = datetime.datetime.now()
         db.commit()
         db.refresh(db_sramstore)
         old_sram = json.loads(db_sramstore.prev_sram)
