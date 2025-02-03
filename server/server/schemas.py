@@ -67,6 +67,7 @@ class DiscordUserCreate(UserBase):
 class User(UserBase):
     id: int
     username: str | None = None
+    token: str | None = None
     supporter: bool = False
     colour: str | None = None
     avatar: str | None = None

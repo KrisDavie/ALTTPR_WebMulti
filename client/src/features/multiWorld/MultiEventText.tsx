@@ -1,5 +1,8 @@
 import { Event } from "@/app/types"
+import { cn } from "@/lib/utils"
 import { JSX } from "react"
+import { useGetUserNameQuery } from "../api/apiSlice"
+import { skipToken } from "@reduxjs/toolkit/query"
 
 interface MultiEventTextProps {
   event: Event
@@ -10,10 +13,28 @@ function MultiEventText(props: MultiEventTextProps) {
   const { event, players } = props
 
   const { from_player, to_player, timestamp, event_data } = event
+  const { data: userName } = useGetUserNameQuery(
+    from_player === -2 && event_data && event_data["user_id"]
+      ? event_data["user_id"]
+      : skipToken,
+  )
   const event_type = event["event_type"]
   const dt = new Date(timestamp)
-  const from_player_name =
-    from_player >= 1 ? players[from_player - 1] : "Server"
+
+  let from_player_name = ""
+
+  switch (from_player) {
+    case -1:
+      from_player_name = "Server"
+      break
+    case -2:
+      from_player_name = (userName && userName["username"]) || "Unknown Player"
+      break
+    default:
+      from_player_name = players[from_player - 1]
+      break
+  }
+
   const to_player_name =
     to_player >= 1 ? players[to_player - 1] : "Unknown Player"
 
@@ -138,24 +159,47 @@ function MultiEventText(props: MultiEventTextProps) {
         </>
       )
       break
-    case "session_create":
+
+    case "session_create": {
+      if (!event_data) {
+        return null
+      }
       final_content = (
         <>
           [{dt.toLocaleString()}] Session {event_data["session_id"]} created
         </>
       )
       break
-    case "chat":
+    }
+    case "chat": {
+      if (!event_data) {
+        return null
+      }
       key = `${event.event_historical ? "old_" : ""}${event.id}_msg`
+      const chat_info_type =
+        event_data["type"] === "info" || event_data["type"] === "error"
       final_content = (
-        <>
+        <div
+          className={cn(
+            chat_info_type ? "italic" : "",
+            event_data["type"] === "error"
+              ? "text-red-500"
+              : event_data["type"] === "info"
+                ? "text-green-500"
+                : "",
+          )}
+        >
           [{dt.toLocaleString()}]{" "}
           <span className="font-bold">{from_player_name}</span>:{" "}
           {event_data["message"]}
-        </>
+        </div>
       )
       break
+    }
     case "new_item": {
+      if (!event_data) {
+        return null
+      }
       const { item_name, location_name } = event_data
       key = `${event.event_historical ? "old_" : ""}${event.id}_item`
       final_content = (
@@ -173,15 +217,15 @@ function MultiEventText(props: MultiEventTextProps) {
       break
     }
     default:
-      // final_content = <>[{dt.toLocaleString()}] Unknown event type: {event_type}</>
+      final_content = (
+        <>
+          [{dt.toLocaleString()}] Unknown event type: {event_type}
+        </>
+      )
       return
   }
 
-  return (
-    <div key={key}>
-      {final_content}
-    </div>
-  )
+  return <div key={key}>{final_content}</div>
 }
 
 export default MultiEventText

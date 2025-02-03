@@ -1,11 +1,11 @@
 export interface Event {
   id: number
-  timestamp: string
+  timestamp: number
   event_type: EventTypes | string
   from_player: number
   to_player: number
   frame_time?: number
-  event_data?: {[keys: string]: string}
+  event_data?: {[key: string]: string}
   session_id?: string
   event_historical?: boolean
 }
@@ -28,6 +28,7 @@ export enum EventTypes {
   player_forfeit = 8,
   player_pause_receive = 9,
   player_resume_receive = 10,
+  user_join_chat = 11,
 }
 
 export interface APIKey {

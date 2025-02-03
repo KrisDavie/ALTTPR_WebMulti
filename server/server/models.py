@@ -32,6 +32,7 @@ class EventTypes(enum.Enum):
     player_forfeit = 8
     player_pause_receive = 9
     player_resume_receive = 10
+    user_join_chat = 11
 
 
 class Log(Base):

@@ -43,6 +43,11 @@ export const sniSlice = createSlice({
         return acc
       }, [])
     },
+    resetGrpc: (state) => {
+      state.grpcConnected = false
+      state.deviceList = []
+      state.connectedDevice = undefined
+    },
     shiftQueue: (state) => {
       state.itemQueue.shift()
     },
@@ -66,6 +71,7 @@ export const {
   setGrpcPort,
   setGrpcConnected,
   setDeviceList,
+  resetGrpc,
   setConnectedDevice,
   addItemsToQueue,
   shiftQueue,

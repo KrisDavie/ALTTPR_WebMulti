@@ -1,18 +1,24 @@
-import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react"
+import {
+  BaseQueryApi,
+  createApi,
+  fakeBaseQuery,
+} from "@reduxjs/toolkit/query/react"
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport"
 import {
+  resetGrpc,
   setConnectedDevice,
   setDeviceList,
   setGrpcConnected,
   shiftQueue,
-  SniSliceState
+  SniSliceState,
 } from "./sniSlice"
 import {
   DevicesClient,
   DeviceControlClient,
   DeviceMemoryClient,
+  DeviceInfoClient,
 } from "@/sni/sni.client"
-import { AddressSpace, MemoryMapping } from "@/sni/sni"
+import { AddressSpace, MemoryMapping, Field } from "@/sni/sni"
 import {
   MultiworldSliceState,
   setPlayerInfo,
@@ -20,9 +26,12 @@ import {
   setReceiving,
   reconnect,
   resumeReceiving,
+  setPlayerType,
+  setFileName,
 } from "../multiWorld/multiworldSlice"
 import { log } from "../loggerSlice"
 import type { AppDispatch } from "@/app/store"
+import { UserState } from "../user/userSlice"
 
 export const ingame_modes = [0x07, 0x09, 0x0b]
 const save_quit_modes = [0x00, 0x01, 0x17, 0x1b]
@@ -59,8 +68,8 @@ const updateReceiving = (dispatch: AppDispatch, receiving_state: boolean) => {
 interface AccessedState {
   multiworld: MultiworldSliceState
   sni: SniSliceState
+  user: UserState
 }
-
 
 const getReceiveState = (state: AccessedState) => {
   return state.multiworld.receiving || receiving_lock
@@ -70,6 +79,25 @@ const getTransport = (state: AccessedState) => {
   return new GrpcWebFetchTransport({
     baseUrl: `http://${state.sni.grpcHost}:${state.sni.grpcPort}`,
   })
+}
+
+const setNonPlayerInfo = (queryApi: BaseQueryApi, user: UserState) => {
+  queryApi.dispatch(
+    setPlayerInfo({
+      player_id: -2,
+      rom_name: "non_player",
+      user_id: user.id,
+      session_token: user.token,
+    }),
+  )
+  queryApi.dispatch(setPlayerType("non_player"))
+}
+
+const isCompatibleSeed = (romName: string) => {
+  return (
+    ["DR", "OR"].includes(romName.slice(0, 2)) &&
+    romName.split("_").length === 4
+  )
 }
 
 export const sniApiSlice = createApi({
@@ -92,6 +120,7 @@ export const sniApiSlice = createApi({
           }
           return { data: devices }
         } catch {
+          queryApi.dispatch(resetGrpc())
           return { error: "Error getting devices." }
         }
       },
@@ -240,7 +269,7 @@ export const sniApiSlice = createApi({
               ]),
             },
           })
-          
+
           queryApi.dispatch(
             log(
               `Done sending item ${memVal.event_data?.item_name}. Getting new state.`,
@@ -260,10 +289,74 @@ export const sniApiSlice = createApi({
         const state = queryApi.getState() as AccessedState
         const transport = getTransport(state)
         const controlMem = new DeviceMemoryClient(transport)
+        const controlDev = new DeviceInfoClient(transport)
         const connectedDevice = state.sni.connectedDevice
+        const connectionState = state.multiworld.connectionState
+        const user = state.user
+
+        // This action is responsible for most of the multiworld logic
+        // We need to see if we are connected to a proper rom and if we are in game
+        // There are several possibilities regarding connections
+        // 1. The user doesn't have SNI open
+        // 2. The user has SNI open but no device available
+        // 3. The user has SNI open and a device available but not connected to a rom
+        // 4. The user has SNI open and a device available and connected to a rom, but not the right one
+        // 5. The user has SNI open and a device available and connected to the correct rom
+
+        // This covers 1. and 2.
         if (!connectedDevice) {
+          // No device
+          if (user.discordUsername && connectionState == "player_info") {
+            setNonPlayerInfo(queryApi, user)
+          }
           return { error: "No device selected" }
         }
+
+        // ================== ROM Checks (Loaded File) ==================
+        // This is needed because an FxPak doesn't clear memory assocaited with the ROM name in memory when switching between ROMs
+        // We can't _just_ rely on this because 2 different ROMs could share the same file name (i.e. MSUs)
+        let fileName
+
+        try {
+          fileName = (
+            await controlDev.fetchFields({
+              uri: connectedDevice,
+              fields: [Field.RomFileName],
+            })
+          ).response.values[0]
+        } catch (e) {
+          if (
+            connectionState === "connected" &&
+            state.multiworld.player_type === "player"
+          ) {
+            queryApi.dispatch(
+              reconnect({ fileName: "", reason: "Error getting ROM info" }),
+            )
+          } else if (connectionState !== "connected") {
+            // Covers 3.
+            setNonPlayerInfo(queryApi, user)
+          }
+          return { error: `Error getting ROM info: ${e}` }
+        }
+
+        if (!fileName) {
+          return { error: "Error getting ROM info" }
+        }
+
+        if (
+          fileName !== state.multiworld.file_name &&
+          connectionState === "connected"
+        ) {
+          queryApi.dispatch(
+            reconnect({ fileName: fileName, reason: "Loaded file changed" }),
+          )
+          return { error: "Rom changed" }
+        }
+
+        queryApi.dispatch(setFileName(fileName))
+
+
+        // ============= Finshed receiving =============
         // Safety check to make sure we're done receiving at the cost of some latency
         let last_item_id = 255
         while (last_item_id > 0) {
@@ -288,13 +381,13 @@ export const sniApiSlice = createApi({
           await new Promise(r => setTimeout(r, 550))
         }
 
+        // ============= Read SRAM =============
+        // Read all the memory locations we want
         const requests = []
         for (const [loc, [name, size]] of Object.entries(sram_locs)) {
           if (
             (name === "pots" && arg.noPots) ||
-            (name === "sprites" && arg.noEnemies) ||
-            (name === "rom_name" && state.multiworld.player_id !== 0)
-            // (name === "rom_name" && state.multiworld.player_id !== 0)
+            (name === "sprites" && arg.noEnemies)
           ) {
             continue
           }
@@ -305,7 +398,6 @@ export const sniApiSlice = createApi({
             size: size,
           })
         }
-
         const multiReadResponse = await controlMem.multiRead({
           uri: connectedDevice,
           requests: requests,
@@ -320,48 +412,50 @@ export const sniApiSlice = createApi({
           sram[sram_locs[res.requestAddress][0]] = Array.from(res.data)
         })
 
-        // Rom has changed, reconnect the websocket
+        // ============= ROM Checks Memory =============
+        const romName = sram["rom_name"]
+          .map(byte => String.fromCharCode(byte))
+          .join("")
+
+        if (!romName || !isCompatibleSeed(romName)) {
+          // Covers 4.
+          setNonPlayerInfo(queryApi, user)
+          return { error: "Incompatible ROM" }
+        }
+
         if (
           state.multiworld.rom_name &&
-          sram["rom_name"] &&
-          ["DR", "OR"].includes(
-            sram["rom_name"]
-              .slice(0, 2)
-              .map(byte => String.fromCharCode(byte))
-              .join(""),
-          ) &&
-          sram["rom_name"]
-            .map(byte => String.fromCharCode(byte))
-            .join("")
-            .split("_")[2] !== state.multiworld.rom_name
+          romName !== state.multiworld.rom_name
         ) {
-          queryApi.dispatch(reconnect())
+          queryApi.dispatch(
+            reconnect({ fileName: "", reason: "ROM name changed" }),
+          )
           return { error: "Rom changed" }
         }
 
-        // TODO: Add a check for it the rom changes and restart the websocket connection with the new playerID
-
-        // check if rom_arr is all 0xff
         if (
-          sram["rom_name"] &&
-          ["DR", "OR"].includes(
-            sram["rom_name"]
-              .slice(0, 2)
-              .map(byte => String.fromCharCode(byte))
-              .join(""),
-          ) &&
-          state.multiworld.player_id === 0
+          state.multiworld.player_id !== undefined &&
+          state.multiworld.player_id <= 0
         ) {
-          const player_id = sram["rom_name"]
-            .map(byte => String.fromCharCode(byte))
-            .join("")
-            .split("_")[2]
-          queryApi.dispatch(
-            setPlayerInfo({
-              rom_name: sram["rom_name"],
-              player_id: parseInt(player_id),
-            }),
-          )
+          const player_id = romName.split("_")[2]
+          let player_info = {
+            rom_name: romName,
+            player_id: parseInt(player_id),
+            player_name: "Player " + player_id,
+            user_id: 0,
+            session_token: "",
+          }
+
+          if (user && user.token) {
+            player_info = {
+              ...player_info,
+              user_id: user.id,
+              session_token: user.token,
+            }
+          }
+          // Covers 5.
+          queryApi.dispatch(setPlayerInfo(player_info))
+          queryApi.dispatch(setPlayerType('player'))
         }
         if (!ingame_modes.includes(sram["game_mode"][0])) {
           if (save_quit_modes.includes(sram["game_mode"][0])) {

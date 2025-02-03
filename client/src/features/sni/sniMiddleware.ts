@@ -1,17 +1,13 @@
 import { Middleware, isAction } from "@reduxjs/toolkit"
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport"
 import { setConnectedDevice, setDeviceList } from "./sniSlice"
-import { DevicesClient, DeviceControlClient } from "@/sni/sni.client"
+import { DevicesClient } from "@/sni/sni.client"
 
 // TODO: This should not be a middleware, but should just use RTK -
 // each action is independent with no persistent state
 
 import type { RootState } from "@/app/store"
 
-// const hexStringToU8Arr = (hexString: string) => {
-//   const bytes = hexString.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16));
-//   return bytes ? Uint8Array.from(bytes) : new Uint8Array(0);
-// }
 
 export const sniMiddleware: Middleware<object, RootState> =
   api => next => async action => {
@@ -34,16 +30,6 @@ export const sniMiddleware: Middleware<object, RootState> =
         )
         api.dispatch(setDeviceList(devices))
         api.dispatch(setConnectedDevice(devices[0]))
-        break
-      }
-      // TODO: Actually wire this up, or remove it from the UI
-      case "sni/reset": {
-        const controlClient = new DeviceControlClient(transport)
-        if (originalState.sni.connectedDevice) {
-          await controlClient.resetSystem({
-            uri: originalState.sni.connectedDevice,
-          })
-        }
         break
       }
     }

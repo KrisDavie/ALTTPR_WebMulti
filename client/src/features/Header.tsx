@@ -46,6 +46,10 @@ function Header() {
   const player_id: number | undefined = useAppSelector(
     state => state.multiworld.player_id,
   )
+  const player_type: string | undefined = useAppSelector(
+    state => state.multiworld.player_type,
+  )
+  const user = useAppSelector(state => state.user)
   const initComplete: boolean | undefined = useAppSelector(
     state => state.multiworld.init_complete,
   )
@@ -122,8 +126,10 @@ function Header() {
       text = "Connecting..."
     } else if (!player_id || !players.data) {
       text = "Connected to " + sessionId
-    } else {
+    } else if (player_type === "player") {
       text = "Connected to " + sessionId + " as " + players.data[player_id - 1]
+    } else if (player_type === "non_player") {
+      text = "Connected to " + sessionId + " as " + user.username + " (Non-player)"
     }
 
     if (location.pathname === "/multi/" + sessionId || !sessionId) {

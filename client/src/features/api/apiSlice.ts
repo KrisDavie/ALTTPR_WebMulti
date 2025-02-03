@@ -118,6 +118,9 @@ export const apiSlice = createApi({
     getPlayers: builder.query({
       query: sessionId => `/session/${sessionId}/players`,
     }),
+    getUserName: builder.query({
+      query: userId => `/users/${userId}/username`,
+    }),
     getAllSessions: builder.query<ISession[], number>({
       query: userId => `/users/${userId}/sessions`,
       providesTags: ["Sessions"],
@@ -178,6 +181,8 @@ export const {
   useGetAllSessionsQuery,
   useLazyGetPlayersQuery,
   useLazyAuthUserQuery,
+  useGetUserNameQuery,
+  useLazyGetUserNameQuery,
   useCreateBotMutation,
   useCreateApiKeyMutation,
   useDeleteBotMutation,

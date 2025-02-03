@@ -3,6 +3,7 @@ import { createSlice } from "@reduxjs/toolkit"
 export interface UserState {
   id: number
   username?: string
+  token?: string
   discordDisplayName?: string
   discordUsername?: string
   usernameAsPlayerName?: boolean
@@ -23,6 +24,7 @@ export interface APIKey {
 const initialState: UserState = {
   id: 0,
   username: undefined,
+  token: undefined,
   discordDisplayName: undefined,
   discordUsername: undefined,
   usernameAsPlayerName: false,
@@ -46,6 +48,7 @@ export const userSlice = createSlice({
       state.superUser = action.payload.is_superuser
       state.bot = action.payload.is_bot
       state.bots = action.payload.bots
+      state.token = action.payload.token
       
     },
     clearUser: state => {
@@ -58,6 +61,7 @@ export const userSlice = createSlice({
       state.superUser = false
       state.bot = undefined
       state.bots = []
+      state.token = undefined
     },
   },
 })

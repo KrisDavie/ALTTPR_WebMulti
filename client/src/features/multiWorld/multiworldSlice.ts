@@ -10,7 +10,10 @@ export interface MultiworldSliceState {
   sessionId: string
   password: string
   events: Event[]
+  file_name: string
+  player_type?: "player" | "non_player"
   memory?: MemoryType
+  connectionState: "disconnected" | "accepted" | "player_info" | "connected"
   rom_name?: string
   player_id?: number
   receiving?: boolean
@@ -23,8 +26,11 @@ const initialState: MultiworldSliceState = {
   sessionId: "",
   password: "",
   events: [],
+  file_name: "",
   memory: {},
+  connectionState: "disconnected",
   rom_name: "",
+  player_type: "player",
   player_id: 0,
   receiving: false,
   receiving_paused: false,
@@ -39,7 +45,12 @@ export const multiworldSlice = createSlice({
     connect: () => {},
     send: () => {},
     disconnect: () => {},
-    reconnect: () => {},
+    reconnect: (state, action) => {
+      state.file_name = action.payload.file_name
+      state.rom_name = ""
+      state.player_id = 0
+      state.connectionState = "disconnected"
+    },
     sendPlayerInfo: () => {},
     sendChatMessage: (_state, _action) => {},
     setSession: (state, action) => {
@@ -65,6 +76,7 @@ export const multiworldSlice = createSlice({
     setPlayerInfo: (state, action) => {
       state.player_id = action.payload.player_id
       state.rom_name = action.payload.rom_name
+      state.connectionState = "connected"
     },
     setReceiving: (state, action) => {
       state.receiving = action.payload
@@ -75,6 +87,15 @@ export const multiworldSlice = createSlice({
     setSramUpdatingOnServer: (state, action) => {
       state.sram_updating_on_server = action.payload
     },
+    setPlayerType: (state, action) => {
+      state.player_type = action.payload
+    },
+    setConnectionState: (state, action) => {
+      state.connectionState = action.payload
+    },
+    setFileName: (state, action) => {
+      state.file_name = action.payload
+    }
   },
   extraReducers: builder => {
     builder.addMatcher(
@@ -105,6 +126,9 @@ export const {
   setSramUpdatingOnServer,
   sendPlayerInfo,
   setReceiving,
+  setPlayerType,
+  setConnectionState,  
+  setFileName,
 } = multiworldSlice.actions
 
 // export const multiworldActions = multiworldSlice.actions

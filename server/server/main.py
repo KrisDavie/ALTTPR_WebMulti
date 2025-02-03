@@ -134,9 +134,10 @@ def verify_session_token(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
     auth_only: bool = False,
+    from_ws: dict = {},
 ) -> tuple[models.User, str]:
     # TODO: Confirm we don't have auth headers in other use cases
-    if "Authorization" in request.headers:
+    if request and "Authorization" in request.headers:
         auth_type, token = request.headers["Authorization"].split(" ")
         if auth_type.lower() != "bearer":
             return False, False
@@ -147,8 +148,13 @@ def verify_session_token(
         updated_token = crud.update_api_key_used(db, token)
         return user, updated_token
 
-    token = request.cookies.get("session_token")
-    user_id = request.cookies.get("user_id")
+    if from_ws == {}:
+        token = request.cookies.get("session_token")
+        user_id = request.cookies.get("user_id")
+    else:
+        token = from_ws.get("session_token")
+        user_id = from_ws.get("user_id")
+
 
     if not user_id:
         if not auth_only:
@@ -222,6 +228,17 @@ def create_bot(
     bot_name = bot_name if bot_name != "" else f"Bot#{bot.id:04}"
     bot = crud.set_bot_username(db, bot.id, bot_name)
     return bot
+
+@app.get("/users/{user_id}/username")
+def get_username(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    user_id: int,
+):
+    user = crud.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"username": user.username}
 
 @app.delete("/users/bot/{bot_id}")
 def delete_bot(
@@ -320,6 +337,7 @@ def auth_user(
         user = crud.update_user(db, user.id, user)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    user.token = token
     return user
 
 @app.post("/users/update", response_model=schemas.User)

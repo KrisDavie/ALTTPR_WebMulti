@@ -10,6 +10,7 @@ import {
   resumeReceiving,
   setSramUpdatingOnServer,
   updateMemory,
+  setConnectionState,
 } from "./multiworldSlice"
 import { nanoid } from "@reduxjs/toolkit"
 import { log } from "../loggerSlice"
@@ -37,7 +38,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
 
     if (reconnect.match(action)) {
       if (socket) {
-        socket.close(4216, "Reconnecting")
+        socket.close(4216, action.payload.reason)
       }
       socket = undefined
       api.dispatch(connect())
@@ -73,7 +74,10 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
 
         switch (data.type) {
           case "connection_accepted":
+            break;
+
           case "player_info_request":
+            api.dispatch(setConnectionState("player_info"))
             break
 
           case "sram_updated":
@@ -134,7 +138,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
                 from_player: data.data.from_player,
                 to_player: -1,
                 timestamp: data.data.timestamp * 1000,
-                event_data: { message: data.data.event_data.message },
+                event_data: { message: data.data.event_data.message, user_id: data.data.event_data.user_id },
                 id: nanoid(),
               }),
             )
@@ -152,7 +156,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
                   (b.event_idx[0] * 256 + b.event_idx[1]),
               )
 
-            sorted_data.forEach((item: Event) => {
+            sorted_data.forEach((item: ItemEvent) => {
               item.timestamp = item.timestamp * 1000 // Convert to milliseconds
               api.dispatch(addEvent(item))
             })
@@ -208,6 +212,30 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
               }),
             )
             break
+          case "non_player_detected":
+            api.dispatch(
+              addEvent({
+                event_type: "chat",
+                from_player:-1,
+                to_player: -1,
+                timestamp: Date.now(),
+                event_data: { message: "The wrong ROM or no ROM was detected.", type: 'error' },
+                id: nanoid(),
+              }),
+            )
+            if (originalState.user.discordUsername !== "") {
+              api.dispatch(
+                addEvent({
+                  event_type: "chat",
+                  from_player:-1,
+                  to_player: -1,
+                  timestamp: Date.now(),
+                  event_data: { message: "You are logged in and may send messages.", type: 'info' },
+                  id: nanoid(),
+                }),
+              )
+            }
+            break
           default:
             console.log("Unknown event type: " + data.type)
             break
@@ -216,7 +244,15 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
       // Try to reconnect if the connection is closed
       socket.onclose = event => {
         if (event.reason !== "") {
-          alert("Connection closed: " + event.reason)
+          api.dispatch(
+            addEvent({
+              event_type: "chat",
+              from_player:-1,
+              to_player: -1,
+              timestamp: Date.now(),
+              event_data: { message: `Your connection to the server was closed (${event.reason})`, type: 'error' },
+              id: nanoid(),
+            }))
           return
         } else {
           api.dispatch(
@@ -273,9 +309,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
       socket?.send(
         JSON.stringify({
           type: "player_info",
-          player_id: action.payload.player_id,
-          player_name: `Player ${action.payload}`,
-          rom_name: action.payload.rom_name,
+          ...action.payload,
         }),
       )
       api.dispatch(setInitComplete(true))

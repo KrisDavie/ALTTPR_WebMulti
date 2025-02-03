@@ -26,6 +26,7 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     useGetPlayersQuery(sessionId)
   const multiworldEvents = useAppSelector(state => state.multiworld.events)
   const currentPlayer = useAppSelector(state => state.multiworld.player_id)
+  const user = useAppSelector(state => state.user)
   const dispatch = useAppDispatch()
   const [hasScrolled, setHasScrolled] = useState(false)
   const [chatMessage, setChatMessage] = useState("")
@@ -125,7 +126,7 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     if (!chatMessage) {
       return
     }
-    dispatch(sendChatMessage({ message: chatMessage }))
+    dispatch(sendChatMessage({ message: chatMessage, user_id: user.id }))
     setChatMessage("")
   }
 
@@ -248,16 +249,16 @@ function MultiEventViewer(props: MultiEventViewerProps) {
         <Input
           type="text"
           className="h-8 w-11/12 rounded-md flex mr-1"
-          disabled={!initComplete}
+          disabled={!initComplete && !user.discordUsername}
           placeholder={
-            initComplete
+            initComplete || user.discordUsername
               ? "Send a message..."
-              : "Cannot send messages until connected..."
+              : "Cannot send messages until connected or logged in with discord..."
           }
           value={chatMessage}
           onChange={e => setChatMessage(e.target.value)}
         />
-        <Button className="h-8 w-1/12 rounded-md flex" disabled={!initComplete}>
+        <Button className="h-8 w-1/12 rounded-md flex" disabled={!initComplete && !user.discordUsername}>
           Send
         </Button>
       </form>

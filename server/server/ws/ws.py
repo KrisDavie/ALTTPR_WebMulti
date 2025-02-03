@@ -10,10 +10,11 @@ from fastapi import (
     APIRouter,
     Depends,
     WebSocket,
-    WebSocketDisconnect
+    WebSocketDisconnect,
 )
 from fastapi.websockets import WebSocketState
 
+import server.main as main
 from sqlalchemy.orm import Session
 from sqlalchemy import event as listen_event
 
@@ -28,6 +29,11 @@ logging.config.dictConfig(logging_config)
 
 router = APIRouter()
 
+# SPECIAL PLAYER IDS:
+# -1: System
+# -2: User lookup (not a player)
+
+
 @router.websocket("/ws/{mw_session_id}")
 async def websocket_endpoint(
     websocket: WebSocket, mw_session_id: str, db: Annotated[Session, Depends(get_db)]
@@ -36,6 +42,8 @@ async def websocket_endpoint(
     session = crud.get_session(db, mw_session_id)
 
     connection_init_time = time.time()
+
+    user_type = None
 
     if not session:
         await websocket.close(reason="Session not found")
@@ -68,6 +76,11 @@ async def websocket_endpoint(
                 return
             player_info = await websocket.receive_json()
             if player_info["type"] == "player_info":
+                user_type = "player"
+                time.sleep(0.1)
+                break
+            elif player_info["type"] == "user_info":
+                user_type = "non_player"
                 time.sleep(0.1)
                 break
         except WebSocketDisconnect:
@@ -75,7 +88,6 @@ async def websocket_endpoint(
 
     try:
         player_id = int(player_info["player_id"])
-        player_name = player_info["player_name"]
     except KeyError:
         await websocket.close(reason="Player info not received")
         return
@@ -84,16 +96,36 @@ async def websocket_endpoint(
 
     mw_rom_names = [x[2] for x in multidata["roms"]]
     player_names = [x for x in multidata["names"][0]]
-    player_name = player_names[player_id - 1]
 
-    if player_info["rom_name"] not in mw_rom_names:
-        await websocket.close(reason="Incorrect ROM found")
-        return
+    if user_type == "player" and (
+        ("rom_name" not in player_info) or ([ord(x) for x in player_info["rom_name"]] not in mw_rom_names)
+    ):
+        await websocket.send_json(
+            {"type": "non_player_detected", "message": "No/Wrong ROM found"}
+        )
+        user_type = "non_player"
+
+    if user_type == "player":
+        player_name = player_names[player_id - 1]
+    elif user_type == "non_player":
+        user, token = main.verify_session_token(
+            None,
+            None,
+            db,
+            auth_only=True,
+            from_ws={
+                "user_id": player_info["user_id"],
+                "session_token": player_info["session_token"],
+            },
+        )
+        player_id = -2
+        player_name = user.username
 
     # Get all events for the session of either join or leave for this player
     conn_events = crud.get_player_connection_events(db, session.id, player_id)
     if (
-        len(conn_events) > 0
+        user_type == "player"
+        and len(conn_events) > 0
         and conn_events[0].event_type == models.EventTypes.player_join
     ):
         logger.warning(f"{player_name} already joined")
@@ -101,18 +133,32 @@ async def websocket_endpoint(
         return
 
     # Log join event
-    crud.create_event(
-        db,
-        schemas.EventCreate(
-            session_id=session.id,
-            event_type=models.EventTypes.player_join,
-            from_player=player_id,
-            to_player=-1,
-            item_id=-1,
-            location=-1,
-            event_data={"player_id": player_id, "player_name": player_name},
-        ),
-    )
+    if user_type == "player":
+        crud.create_event(
+            db,
+            schemas.EventCreate(
+                session_id=session.id,
+                event_type=models.EventTypes.player_join,
+                from_player=player_id,
+                to_player=-1,
+                item_id=-1,
+                location=-1,
+                event_data={"player_id": player_id, "player_name": player_name},
+            ),
+        )
+    else:
+        crud.create_event(
+            db,
+            schemas.EventCreate(
+                session_id=session.id,
+                event_type=models.EventTypes.user_join_chat,
+                from_player=-2,
+                to_player=-1,
+                item_id=-1,
+                location=-1,
+                event_data={"player_id": player_id, "player_name": player_name},
+            ),
+        )
 
     multidata_locs = {tuple(d[0]): tuple(d[1]) for d in multidata["locations"]}
 
@@ -122,7 +168,8 @@ async def websocket_endpoint(
     witheld_items = []
     processing_sram = False
 
-    await websocket.send_json({"type": "init_success"})
+    if user_type == "player":
+        await websocket.send_json({"type": "init_success"})
 
     # This listens for new events and sends them to the client, it's never actually called itself
     @listen_event.listens_for(models.Event, "after_insert")
@@ -349,6 +396,9 @@ async def websocket_endpoint(
                 )
                 continue
             elif payload["type"] == "chat":
+                ev_data = {"message": payload["data"], "type": "chat"}
+                if user_type == "non_player":
+                    ev_data["user_id"] = user.id
                 ev = crud.create_event(
                     db,
                     schemas.EventCreate(
@@ -358,14 +408,14 @@ async def websocket_endpoint(
                         to_player=-1,
                         item_id=-1,
                         location=-1,
-                        event_data={"message": payload["data"], "type": "chat"},
+                        event_data=ev_data,
                     ),
                 )
                 # Check for commands
                 if payload["data"].startswith("/"):
                     command = payload["data"].split(" ")
                     if command[0] == "/countdown":
-                    
+
                         if len(command) < 2:
                             countdown_time = 5
                         else:
@@ -390,19 +440,34 @@ async def websocket_endpoint(
                         loop = asyncio.get_event_loop()
                         loop.create_task(countdown(countdown_time, session, db))
                     elif command[0] == "/missing":
-                        all_player_events = crud.get_events_from_player(db, session.id, player_id)
-                        all_player_events = [x for x in all_player_events if x.event_type == models.EventTypes.new_item]
-                        all_player_locations = set([x[0][0] for x in multidata["locations"] if x[0][1] == player_id])
+                        all_player_events = crud.get_events_from_player(
+                            db, session.id, player_id
+                        )
+                        all_player_events = [
+                            x
+                            for x in all_player_events
+                            if x.event_type == models.EventTypes.new_item
+                        ]
+                        all_player_locations = set(
+                            [
+                                x[0][0]
+                                for x in multidata["locations"]
+                                if x[0][1] == player_id
+                            ]
+                        )
                         for event in all_player_events:
                             if event.location in all_player_locations:
                                 all_player_locations.remove(event.location)
-                        missing_locs = [loc_data.lookup_id_to_name[str(x)] for x in all_player_locations]
+                        missing_locs = [
+                            loc_data.lookup_id_to_name[str(x)]
+                            for x in all_player_locations
+                        ]
                         system_chat(
                             f"Missing locations:",
                             session,
                             db,
                             private=player_id,
-                        ) 
+                        )
                         for loc in missing_locs:
                             system_chat(
                                 f"    {loc}",
@@ -447,18 +512,29 @@ async def websocket_endpoint(
                     continue
 
                 locations = sram.get_changed_locations(sram_diff, old_sram, new_sram)
-                frame_time = new_sram["total_time"][2] << 16 | new_sram["total_time"][1] << 8 | new_sram["total_time"][0]
-                old_frame_time = old_sram["total_time"][2] << 16 | old_sram["total_time"][1] << 8 | old_sram["total_time"][0]
+                frame_time = (
+                    new_sram["total_time"][2] << 16
+                    | new_sram["total_time"][1] << 8
+                    | new_sram["total_time"][0]
+                )
+                old_frame_time = (
+                    old_sram["total_time"][2] << 16
+                    | old_sram["total_time"][1] << 8
+                    | old_sram["total_time"][0]
+                )
 
                 if frame_time < old_frame_time:
-                    logger.debug(f"{player_name} - Frame time went backwards - Save scum or reset")
+                    logger.debug(
+                        f"{player_name} - Frame time went backwards - Save scum or reset"
+                    )
                     events_to_update = crud.get_events_after_frametime(
                         db, session.id, player_id, frame_time
                     )
-                    crud.update_events_frametime(db, session.id, player_id, events_to_update, None)
+                    crud.update_events_frametime(
+                        db, session.id, player_id, events_to_update, None
+                    )
                     for event in events_to_update:
                         checked_locations[event.location] = None
-
 
                 for location in locations:
                     loc_id = int(loc_data.lookup_name_to_id[location])
@@ -470,7 +546,10 @@ async def websocket_endpoint(
                         continue
                     item_id, item_player = multidata_locs[(loc_id, player_id)]
 
-                    if loc_id not in checked_locations or (checked_locations[loc_id] != None and checked_locations[loc_id] < frame_time):
+                    if loc_id not in checked_locations or (
+                        checked_locations[loc_id] != None
+                        and checked_locations[loc_id] < frame_time
+                    ):
                         logger.info(
                             f"{player_name} - New Location Checked: {location} [{loc_id}]"
                         )
@@ -537,15 +616,17 @@ async def websocket_endpoint(
                 logger.error(f"Unknown message: {payload}")
                 continue
     except WebSocketDisconnect:
-        crud.create_event(
-            db,
-            schemas.EventCreate(
-                session_id=session.id,
-                event_type=models.EventTypes.player_leave,
-                from_player=player_id,
-                to_player=-1,
-                item_id=-1,
-                location=-1,
-                event_data={"player_id": player_id, "player_name": player_name},
-            ),
-        )
+        if user_type == "player":
+            # Log leave event
+            crud.create_event(
+                db,
+                schemas.EventCreate(
+                    session_id=session.id,
+                    event_type=models.EventTypes.player_leave,
+                    from_player=player_id,
+                    to_player=-1,
+                    item_id=-1,
+                    location=-1,
+                    event_data={"player_id": player_id, "player_name": player_name},
+                ),
+            )
