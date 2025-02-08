@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit"
 import { apiSlice } from "@/features/api/apiSlice"
 import { Event } from "@/app/types"
+import { IFeatures } from "../dashboard/MultiworldSessions"
 
 export interface MemoryType {
   [key: string]: number[]
@@ -11,6 +12,7 @@ export interface MultiworldSliceState {
   password: string
   events: Event[]
   file_name: string
+  flags: IFeatures
   player_type?: "player" | "non_player"
   memory?: MemoryType
   connectionState: "disconnected" | "accepted" | "player_info" | "connected"
@@ -27,6 +29,13 @@ const initialState: MultiworldSliceState = {
   password: "",
   events: [],
   file_name: "",
+  flags: {
+    chat: false,
+    pauseRecieving: false,
+    missingCmd: false,
+    duping: false,
+    forfeit: false,
+  },
   memory: {},
   connectionState: "disconnected",
   rom_name: "",
@@ -95,7 +104,10 @@ export const multiworldSlice = createSlice({
     },
     setFileName: (state, action) => {
       state.file_name = action.payload
-    }
+    },
+    setFlags: (state, action) => {
+      state.flags = action.payload
+    },
   },
   extraReducers: builder => {
     builder.addMatcher(
@@ -126,6 +138,7 @@ export const {
   setSramUpdatingOnServer,
   sendPlayerInfo,
   setReceiving,
+  setFlags,
   setPlayerType,
   setConnectionState,  
   setFileName,

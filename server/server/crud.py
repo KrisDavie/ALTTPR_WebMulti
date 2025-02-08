@@ -266,20 +266,39 @@ def get_user_by_username(db: Session, username: str):
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
+def get_user_by_discord_id(db: Session, discord_id: str):
+    return db.query(models.User).filter(models.User.discord_id == discord_id).first()
+
 
 def add_owner_to_session(db: Session, session_id: str, user_id: int):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     db_session = (
         db.query(models.MWSession).filter(models.MWSession.id == session_id).first()
     )
+    if db_user in db_session.owners:
+        return db_session, db_user
     logger.debug(f"Adding user {db_user.id} to session {db_session.id}")
     db_session.owners.append(db_user)
     db.commit()
     db.refresh(db_session)
+    db.refresh(db_user)
     logger.debug(
         f"Added user {db_user.id} to session {db_session.id}, owners: {db_session.owners}"
     )
-    return db_session
+    return db_session, db_user
+
+def add_user_to_session(db: Session, session_id: str, user_id: int) -> tuple[models.MWSession, models.User]:
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_session = (
+        db.query(models.MWSession).filter(models.MWSession.id == session_id).first()
+    )
+    if db_user in db_session.users:
+        return db_session, db_user
+    db_session.users.append(db_user)
+    db.commit()
+    db.refresh(db_session)
+    db.refresh(db_user)
+    return db_session, db_user
 
 
 def get_session(db: Session, session_id: str):
@@ -462,10 +481,6 @@ def get_events_from_player(
 
 def get_game(db: Session, game_name: str):
     return db.query(models.Game).filter(models.Game.title == game_name).first()
-
-
-def get_session(db: Session, session_id: str):
-    return db.query(models.MWSession).filter(models.MWSession.id == session_id).first()
 
 
 def create_game(db: Session, game: schemas.GameCreate):

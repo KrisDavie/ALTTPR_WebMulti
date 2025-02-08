@@ -33,7 +33,16 @@ class EventTypes(enum.Enum):
     player_pause_receive = 9
     player_resume_receive = 10
     user_join_chat = 11
+    player_kicked = 12
 
+
+base_flags ={
+    "chat": True,
+    "pauseRecieving": True,
+    "missingCmd": True,
+    "duping": True,
+    "forfeit": True,
+}
 
 class Log(Base):
     __tablename__ = "logs"
@@ -146,6 +155,9 @@ class MWSession(Base):
         "User", secondary="owned_sessions", back_populates="owned_sessions"
     )
 
+    # Array of discord user ids
+    allowed_users = Column(ARRAY(String), nullable=True)
+    flags = Column(JSON, default=base_flags)
     mwdata = Column(JSON)
 
     game = relationship("Game", back_populates="mwsessions")

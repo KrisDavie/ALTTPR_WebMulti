@@ -21,6 +21,9 @@ function MultiView() {
   const [adminMode, setAdminMode] = useState(false)
   const { data: session, isLoading: sessionLoading } = useGetSessionQuery(sessionId)
   const [sendForfeit, sendForfeitResult] = useSendForfeitMutation()
+  
+  const { forfeit: forfeitFlag } = session?.featureFlags || {}
+
 
   useEffect(() => {
     dispatch(setSession({ sessionId }))
@@ -53,7 +56,7 @@ function MultiView() {
       <div className="flex flex-row space-x-2">
         <Button
         className="w-32 mt-2"
-          disabled={playerId === undefined || hasForfeited()}
+          disabled={playerId === undefined || hasForfeited() || !forfeitFlag}
           onClick={handleForfeit}
         >
           {hasForfeited() ?  "Already Forfeit" : "Forfeit"}

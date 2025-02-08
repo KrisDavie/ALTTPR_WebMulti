@@ -20,7 +20,7 @@ def system_chat(
         schemas.EventCreate(
             session_id=session.id,
             event_type=models.EventTypes.chat,
-            from_player=0,
+            from_player=-1,
             to_player=private,
             item_id=-1,
             location=-1,
@@ -48,3 +48,20 @@ async def countdown(
             else:
                 await sleep(0.010)
     system_chat("GO!", session, db, type="countdown")
+
+
+def sanitize_chat_message(message: str):
+    if message.startswith('/'):
+        command = message.split(' ')
+        if command[0] == '/countdown':
+            final_message = command[0]
+            if len(command) > 1:
+                try:
+                    final_message = ' '.join(command[0], int(command[1]))
+                except:
+                    pass
+        else:
+            final_message = command[0]
+    else:
+        final_message = message
+    return final_message[:1000]

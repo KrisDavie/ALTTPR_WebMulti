@@ -146,6 +146,7 @@ class Event(EventBase):
 class MWSessionBase(BaseModel):
     is_active: bool
     mwdata: dict | None = None
+    flags: dict | None = None
 
 
 class MWSessionCreate(MWSessionBase):
@@ -158,6 +159,7 @@ class MWSession(MWSessionBase):
     id: uuid.UUID
     created_at: datetime.datetime
     game: Game
+    allowed_users: List[str] = []
 
     class Config:
         from_attributes = True
@@ -203,6 +205,7 @@ class Features(BaseModel):
     pauseRecieving: bool
     missingCmd: bool
     duping: bool
+    forfeit: bool
 
 class MWSessionInfo(BaseModel):
     id: str

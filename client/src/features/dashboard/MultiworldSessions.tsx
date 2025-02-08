@@ -42,11 +42,12 @@ interface IPlayer {
   userId?: number
 }
 
-interface IFeatures {
+export interface IFeatures {
   chat: boolean
   pauseRecieving: boolean
   missingCmd: boolean
   duping: boolean
+  forfeit: boolean
 }
 
 export interface ISession {

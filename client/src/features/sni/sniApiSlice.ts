@@ -314,7 +314,7 @@ export const sniApiSlice = createApi({
 
         // ================== ROM Checks (Loaded File) ==================
         // This is needed because an FxPak doesn't clear memory assocaited with the ROM name in memory when switching between ROMs
-        // We can't _just_ rely on this because 2 different ROMs could share the same file name (i.e. MSUs)
+        // We can't _just_ rely on this because 2 different ROMs could share the same file name (i.e. when using MSUs)
         let fileName
 
         try {
@@ -438,21 +438,14 @@ export const sniApiSlice = createApi({
           state.multiworld.player_id <= 0
         ) {
           const player_id = romName.split("_")[2]
-          let player_info = {
+          const player_info = {
             rom_name: romName,
             player_id: parseInt(player_id),
             player_name: "Player " + player_id,
-            user_id: 0,
-            session_token: "",
+            user_id: user && user.id ? user.id : 0,	
+            session_token: user && user.token ? user.token : "",
           }
 
-          if (user && user.token) {
-            player_info = {
-              ...player_info,
-              user_id: user.id,
-              session_token: user.token,
-            }
-          }
           // Covers 5.
           queryApi.dispatch(setPlayerInfo(player_info))
           queryApi.dispatch(setPlayerType('player'))

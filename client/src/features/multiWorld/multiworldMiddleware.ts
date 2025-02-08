@@ -11,6 +11,7 @@ import {
   setSramUpdatingOnServer,
   updateMemory,
   setConnectionState,
+  setFlags,
 } from "./multiworldSlice"
 import { nanoid } from "@reduxjs/toolkit"
 import { log } from "../loggerSlice"
@@ -74,7 +75,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
 
         switch (data.type) {
           case "connection_accepted":
-            break;
+            break
 
           case "player_info_request":
             api.dispatch(setConnectionState("player_info"))
@@ -138,7 +139,10 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
                 from_player: data.data.from_player,
                 to_player: -1,
                 timestamp: data.data.timestamp * 1000,
-                event_data: { message: data.data.event_data.message, user_id: data.data.event_data.user_id },
+                event_data: {
+                  message: data.data.event_data.message,
+                  user_id: data.data.event_data.user_id,
+                },
                 id: nanoid(),
               }),
             )
@@ -147,7 +151,8 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
           case "new_items": {
             const sorted_data = data.data
               .filter(
-                (item: ItemEvent) => item.event_idx && item.event_idx.length == 2,
+                (item: ItemEvent) =>
+                  item.event_idx && item.event_idx.length == 2,
               )
               .sort(
                 (a: ItemEvent, b: ItemEvent) =>
@@ -166,14 +171,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
                 item.from_player != currentState.multiworld.player_id &&
                 item.to_player == currentState.multiworld.player_id,
             )
-            // api.dispatch(log(`Items:`))
-            // self_data.map((item: any) =>
-            //   api.dispatch(
-            //     log(
-            //       `IX: ${item.event_idx[0] * 256 + item.event_idx[1]}: ${item.event_data.item_name} (${item.event_data.location_name}) ${item.from_player} -> ${item.to_player}`,
-            //     ),
-            //   ),
-            // )
+
             if (self_data.length > 0) {
               api.dispatch(
                 addItemsToQueue(
@@ -216,10 +214,13 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
             api.dispatch(
               addEvent({
                 event_type: "chat",
-                from_player:-1,
+                from_player: -1,
                 to_player: -1,
                 timestamp: Date.now(),
-                event_data: { message: "The wrong ROM or no ROM was detected.", type: 'error' },
+                event_data: {
+                  message: "The wrong ROM or no ROM was detected.",
+                  type: "error",
+                },
                 id: nanoid(),
               }),
             )
@@ -227,15 +228,23 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
               api.dispatch(
                 addEvent({
                   event_type: "chat",
-                  from_player:-1,
+                  from_player: -1,
                   to_player: -1,
                   timestamp: Date.now(),
-                  event_data: { message: "You are logged in and may send messages.", type: 'info' },
+                  event_data: {
+                    message:
+                      "You are logged in via discord and may send messages.",
+                    type: "info",
+                  },
                   id: nanoid(),
                 }),
               )
             }
             break
+          case "flags":
+            api.dispatch(setFlags(data.data))
+            break
+
           default:
             console.log("Unknown event type: " + data.type)
             break
@@ -247,12 +256,16 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
           api.dispatch(
             addEvent({
               event_type: "chat",
-              from_player:-1,
+              from_player: -1,
               to_player: -1,
               timestamp: Date.now(),
-              event_data: { message: `Your connection to the server was closed (${event.reason})`, type: 'error' },
+              event_data: {
+                message: `Your connection to the server was closed (${event.reason})`,
+                type: "error",
+              },
               id: nanoid(),
-            }))
+            }),
+          )
           return
         } else {
           api.dispatch(
@@ -265,6 +278,28 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
       }
     }
     const currentState = api.getState() as RootState
+    if (
+      socket &&
+      (socket.readyState === WebSocket.CLOSING ||
+        socket.readyState === WebSocket.CLOSED)
+    ) {
+      socket = undefined
+      api.dispatch(
+        addEvent({
+          event_type: "chat",
+          from_player: -1,
+          to_player: -1,
+          timestamp: Date.now(),
+          event_data: {
+            message: `Your connection to the server was unexpectedly closed. Reconnecting...`,
+            type: "error",
+          },
+          id: nanoid(),
+        }),
+      )
+      api.dispatch(connect())
+      return next(action)
+    }
     if (
       updateMemory.match(action) &&
       !currentState.multiworld.receiving &&

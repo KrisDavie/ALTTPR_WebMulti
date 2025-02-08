@@ -22,7 +22,7 @@ from server import crud, models, schemas, sram
 from server.data import data as loc_data
 from server.logging import logging_config
 from server.dependencies import get_db
-from server.utils import system_chat, countdown
+from server.utils import system_chat, sanitize_chat_message, countdown
 
 logger = logging.getLogger(__name__)
 logging.config.dictConfig(logging_config)
@@ -98,26 +98,43 @@ async def websocket_endpoint(
     player_names = [x for x in multidata["names"][0]]
 
     if user_type == "player" and (
-        ("rom_name" not in player_info) or ([ord(x) for x in player_info["rom_name"]] not in mw_rom_names)
+        ("rom_name" not in player_info)
+        or ([ord(x) for x in player_info["rom_name"]] not in mw_rom_names)
     ):
         await websocket.send_json(
             {"type": "non_player_detected", "message": "No/Wrong ROM found"}
         )
         user_type = "non_player"
 
+    user, token = main.verify_session_token(
+        None,
+        None,
+        db,
+        auth_only=True,
+        from_ws={
+            "user_id": player_info["user_id"],
+            "session_token": player_info["session_token"],
+        },
+    )
+
+    if session.allowed_users != None:
+        all_allowed_users = session.allowed_users + [
+            x.discord_id for x in session.owners
+        ]
+        if (
+            not user or user.discord_id not in all_allowed_users
+        ) and not user.is_superuser:
+            await websocket.close(reason="Authorized users only")
+            return
+
     if user_type == "player":
         player_name = player_names[player_id - 1]
+        session, user = crud.add_user_to_session(db, session, user, player_id)
+
     elif user_type == "non_player":
-        user, token = main.verify_session_token(
-            None,
-            None,
-            db,
-            auth_only=True,
-            from_ws={
-                "user_id": player_info["user_id"],
-                "session_token": player_info["session_token"],
-            },
-        )
+        if not user:
+            await websocket.close(reason="No user info detected")
+            return
         player_id = -2
         player_name = user.username
 
@@ -165,8 +182,9 @@ async def websocket_endpoint(
     events_to_send = []
     should_close = False
     skip_update = 0
-    witheld_items = []
     processing_sram = False
+
+    await websocket.send_json({"type": "flags", "data": session.flags})
 
     if user_type == "player":
         await websocket.send_json({"type": "init_success"})
@@ -186,7 +204,6 @@ async def websocket_endpoint(
             skip_update = 3
             return
         elif websocket.client_state != WebSocketState.CONNECTED:
-            # TODO: Actually handle this
             should_close = True
             return
         new_event = {
@@ -215,6 +232,11 @@ async def websocket_endpoint(
                 new_event["data"]["event_idx"] = list(
                     target_event.to_player_idx.to_bytes(2, "big")
                 )
+
+        if target_event.event_type == models.EventTypes.player_kicked:
+            if target_event.to_player == player_id:
+                should_close = True
+
         if target_event.event_type == models.EventTypes.chat:
             if target_event.event_data["type"] == "countdown":
                 loop = asyncio.get_event_loop()
@@ -354,11 +376,13 @@ async def websocket_endpoint(
 
                 events_to_send = []
 
-                if len(witheld_items) > 0:
-                    logger.debug(f"{player_name} - Appending witheld items")
-                    events_to_send = [{"type": "new_items", "data": witheld_items}]
-                    witheld_items = []
+                # We do this at the end, so that we can include the kicked message as an event.
+                # We'll use this on the frontend to close the connection and direct the user away from the session
+                if should_close:
+                    await websocket.close()
+                    raise WebSocketDisconnect
 
+            # Wait for a message from the client, but only for 1.5 seconds, then we loop back to the top and process events from other players
             try:
                 payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.5)
             except asyncio.TimeoutError:
@@ -396,9 +420,26 @@ async def websocket_endpoint(
                 )
                 continue
             elif payload["type"] == "chat":
-                ev_data = {"message": payload["data"], "type": "chat"}
+                ev_data = {"message": sanitize_chat_message(payload["data"]), "type": "chat"}
                 if user_type == "non_player":
                     ev_data["user_id"] = user.id
+
+                if session.flags["chat"] == False:
+                    if not payload["data"].startswith("/") or payload["data"].split(
+                        " "
+                    )[0] not in [
+                        "/countdown",
+                        "/missing",
+                    ]:  # TODO: Move this to a list variable somewher
+                        system_chat(
+                            "Chat is disabled in this session",
+                            session,
+                            db,
+                            private=player_id,
+                        )
+                        continue
+
+                # Check for commands
                 ev = crud.create_event(
                     db,
                     schemas.EventCreate(
@@ -411,11 +452,10 @@ async def websocket_endpoint(
                         event_data=ev_data,
                     ),
                 )
-                # Check for commands
+                
                 if payload["data"].startswith("/"):
                     command = payload["data"].split(" ")
                     if command[0] == "/countdown":
-
                         if len(command) < 2:
                             countdown_time = 5
                         else:
@@ -440,6 +480,14 @@ async def websocket_endpoint(
                         loop = asyncio.get_event_loop()
                         loop.create_task(countdown(countdown_time, session, db))
                     elif command[0] == "/missing":
+                        if session.flags["missingCmd"] == False:
+                            system_chat(
+                                "The /missing command is disabled in this session",
+                                session,
+                                db,
+                                private=player_id,
+                            )
+                            continue
                         all_player_events = crud.get_events_from_player(
                             db, session.id, player_id
                         )
@@ -475,11 +523,51 @@ async def websocket_endpoint(
                                 db,
                                 private=player_id,
                             )
-
                     else:
                         await websocket.send_json(
                             {"type": "chat", "data": "Unknown command"}
                         )
+            elif payload["type"] == "control":
+                if payload["data"]["type"] == "kick":
+                    if not user.is_superuser and user not in session.owners:
+                        system_chat(
+                            "You do not have permission to kick players.",
+                            session,
+                            db,
+                            private=player_id,
+                        )
+                        continue
+                    player_to_kick = payload["data"]["player_id"]
+                    if player_to_kick == player_id:
+                        system_chat(
+                            "You cannot kick yourself",
+                            session,
+                            db,
+                            private=player_id,
+                        )
+                        continue
+                    if player_to_kick <= 0 or player_to_kick > len(player_names):
+                        system_chat(
+                            "Could not find player to kick",
+                            session,
+                            db,
+                            private=player_id,
+                        )
+                        continue
+                    ev = crud.create_event(
+                        db,
+                        schemas.EventCreate(
+                            session_id=session.id,
+                            event_type=models.EventTypes.player_kicked,
+                            from_player=player_id,
+                            to_player=player_to_kick,
+                            item_id=-1,
+                            location=-1,
+                            event_data={"player_id": player_to_kick},
+                        ),
+                    )
+                    continue
+
             elif payload["type"] == "update_memory":
                 # Update the memory for the session
                 if processing_sram:
@@ -548,7 +636,10 @@ async def websocket_endpoint(
 
                     if loc_id not in checked_locations or (
                         checked_locations[loc_id] != None
-                        and checked_locations[loc_id] < frame_time
+                        and (
+                            (checked_locations[loc_id] < frame_time)
+                            and session.flags["duping"]
+                        )
                     ):
                         logger.info(
                             f"{player_name} - New Location Checked: {location} [{loc_id}]"

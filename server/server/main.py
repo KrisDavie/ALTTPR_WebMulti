@@ -141,7 +141,7 @@ def verify_session_token(
         auth_type, token = request.headers["Authorization"].split(" ")
         if auth_type.lower() != "bearer":
             return False, False
-        
+
         user = crud.get_user_by_api_key(db, token)
         if not user:
             return False, False
@@ -154,7 +154,6 @@ def verify_session_token(
     else:
         token = from_ws.get("session_token")
         user_id = from_ws.get("user_id")
-
 
     if not user_id:
         if not auth_only:
@@ -221,13 +220,14 @@ def create_bot(
         existing_user = crud.get_user_by_username(db, bot_name)
         if existing_user:
             raise HTTPException(status_code=409, detail="Username already exists")
-        
+
     bot = crud.create_user(
         db, schemas.UserCreate(bot=True, session_tokens=[], bot_owner_id=user.id)
     )
     bot_name = bot_name if bot_name != "" else f"Bot#{bot.id:04}"
     bot = crud.set_bot_username(db, bot.id, bot_name)
     return bot
+
 
 @app.get("/users/{user_id}/username")
 def get_username(
@@ -239,6 +239,7 @@ def get_username(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"username": user.username}
+
 
 @app.delete("/users/bot/{bot_id}")
 def delete_bot(
@@ -255,7 +256,7 @@ def delete_bot(
 
     if not user.is_superuser and user.id != bot.bot_owner_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
-    
+
     success = crud.delete_bot(db, bot_id)
 
     if not success:
@@ -274,7 +275,7 @@ def create_apikey(
     user, token = user_info
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
+
     bot = crud.get_user(db, bot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Bot not found")
@@ -289,7 +290,7 @@ def create_apikey(
         owner_id=user.id,
         user_id=bot_id,
         api_key=schemas.APIKeyCreate(
-            key=secrets.token_urlsafe(32), description='test_description'
+            key=secrets.token_urlsafe(32), description="test_description"
         ),
     )
     return apikey
@@ -332,13 +333,14 @@ def auth_user(
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
     user, token = user_info
-    if (user.discord_id and not user.discord_display_name):
+    if user.discord_id and not user.discord_display_name:
         user.discord_display_name = user.username
         user = crud.update_user(db, user.id, user)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     user.token = token
     return user
+
 
 @app.post("/users/update", response_model=schemas.User)
 def set_username(
@@ -347,7 +349,6 @@ def set_username(
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
     username: str = Body(None),
     username_as_player_name: bool = Body(None),
-
 ):
     user, token = user_info
     if not user:
@@ -395,7 +396,7 @@ async def discord_auth(
     # No user set in the browser
     if not user:
         # TODO: This workflow could be better
-        user = crud.get_user_by_email(db, discord_user["email"])
+        user = crud.get_user_by_discord_id(db, discord_user["id"])
     # User hasn't logged in before
     if not user:
         user, token = create_guest_user(response, db)
@@ -516,6 +517,10 @@ def get_session_info(
         (x.username if x.username else f"Guest#{x.id:04}", x.id) for x in session.owners
     ]
 
+    featureFlags = {}
+    for feature, default in models.base_flags.items():
+        featureFlags[feature] = session.flags.get(feature, default)
+
     session_model = schemas.MWSessionInfo(
         id=str(session.id),
         players=player_datas,
@@ -524,12 +529,7 @@ def get_session_info(
         admins=owners_info,
         createdTimestamp=int(session.created_at.timestamp() * 1000),
         lastChangeTimestamp=int(last_updated * 1000),
-        featureFlags=schemas.Features(
-            chat=True,
-            pauseRecieving=True,
-            missingCmd=True,
-            duping=True,
-        ),
+        featureFlags=schemas.Features(**featureFlags),
         race=session.tournament,
     )
     return session_model
@@ -574,9 +574,11 @@ def get_user_sessions(
 @app.post("/multidata")
 def create_multi_session(
     file: Annotated[bytes, File()],
-    game: Annotated[str, Form()],
     db: Annotated[Session, Depends(get_db)],
     file_size: Annotated[int, Depends(valid_content_length)],
+    game: Annotated[str, Form()] = "z3",
+    tournament: Annotated[bool, Form()] = False,
+    flags: Annotated[str, Form()] = "{}",
     password: Annotated[str, Form()] = None,
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
 ):
@@ -598,6 +600,22 @@ def create_multi_session(
 
     parsed_data = json.loads(zlib.decompress(multidata).decode("utf-8"))
 
+    flags = json.loads(flags)
+
+    if tournament:
+        # Allow overwriting flags, but make default strict
+        if "forfeit" not in flags:
+            flags["forfeit"] = False
+        if "missingCmd" not in flags:
+            flags["missingCmd"] = False
+
+    final_flags = models.base_flags.copy()
+
+    for key, value in flags.items():
+        if key not in models.base_flags:
+            raise HTTPException(status_code=400, detail=f"Invalid flag: {key}")
+        final_flags[key] = value
+
     # Create a session for the game
     session = crud.create_session(
         db,
@@ -606,6 +624,8 @@ def create_multi_session(
             is_active=True,
             mwdata=parsed_data,
             session_password=password if password else None,
+            tournament=tournament,
+            flags=final_flags,
         ),
         user.id,
     )
@@ -633,8 +653,22 @@ def create_multi_session(
 
 @app.get("/session/{mw_session_id}/events")
 def get_session_events(
-    mw_session_id: str, db: Annotated[Session, Depends(get_db)]
+    mw_session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ) -> list[schemas.Event]:
+    session = crud.get_session(db, mw_session_id)
+    user, token = user_info
+
+    if session.allowed_users != None:
+        all_allowed_users = session.allowed_users + [
+            x.discord_id for x in session.owners
+        ]
+        if (
+            not user or user.discord_id not in all_allowed_users
+        ) and not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+
     all_events = crud.get_events(db, session_id=mw_session_id)
     for event in all_events:
         if event.event_type == models.EventTypes.new_item:
@@ -751,6 +785,8 @@ async def player_forfeit(
     if not session:
         return {"error": "Session not found"}
 
+    if not session.flags["forfeit"]:
+        return {"error": "Forfeit not enabled"}
     # TODO: Maybe add some security here.
     # Potentially a unique code generated per player when the session is made?
     player_id = send_data["player_id"]

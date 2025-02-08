@@ -12,11 +12,13 @@ export const apiSlice = createApi({
   tagTypes: ["User", "Sessions"],
   endpoints: builder => ({
     uploadMultiData: builder.mutation({
-      query: ({ data, game }) => {
+      query: ({ data, tournament, flags }) => {
         const body = new FormData()
         body.append("file", data)
         body.append("Content-Type", "multipart/form-data")
-        body.append("game", game)
+        body.append("game", 'z3')
+        body.append("tournament", tournament)
+        body.append("flags", JSON.stringify(flags))
         return {
           url: "/multidata",
           method: "POST",
