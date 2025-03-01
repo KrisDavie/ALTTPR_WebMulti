@@ -35,6 +35,7 @@ def set_bot_username(db: Session, user_id: int, username: str):
     db.refresh(db_user)
     return db_user
 
+
 def update_user(db: Session, user_id: int, user: schemas.User):
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     db_user.username = user.username
@@ -266,6 +267,7 @@ def get_user_by_username(db: Session, username: str):
 def get_user_by_email(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
+
 def get_user_by_discord_id(db: Session, discord_id: str):
     return db.query(models.User).filter(models.User.discord_id == discord_id).first()
 
@@ -287,17 +289,21 @@ def add_owner_to_session(db: Session, session_id: str, user_id: int):
     )
     return db_session, db_user
 
-def add_user_to_session(db: Session, session_id: str, user_id: int) -> tuple[models.MWSession, models.User]:
+
+def add_user_to_session(
+    db: Session, session_id: str, user_id: int, player_id: int
+) -> tuple[models.MWSession, models.User]:
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     db_session = (
         db.query(models.MWSession).filter(models.MWSession.id == session_id).first()
     )
-    if db_user in db_session.users:
-        return db_session, db_user
-    db_session.users.append(db_user)
+    assoc = models.UserSessions(player_id=player_id)
+    db_user.sessions.append(assoc)
+    db_session.users.append(assoc)
     db.commit()
-    db.refresh(db_session)
     db.refresh(db_user)
+    db.refresh(db_session)
+
     return db_session, db_user
 
 
@@ -323,6 +329,34 @@ def get_user_sessions(db: Session, user_id: int, skip: int = 0, limit: int = 0):
     if limit <= 0:
         return all_sessions.offset(skip).all()
     return all_sessions.offset(skip).limit(limit).all()
+
+
+def get_user_session_links(db: Session, session_id: str):
+    return (
+        db.query(models.UserSessions)
+        .filter(models.UserSessions.session_id == session_id)
+        .all()
+    )
+
+
+def create_user_session_link(
+    db: Session, user_id: int, session_id: str, player_id: str
+):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_session = (
+        db.query(models.MWSession).filter(models.MWSession.id == session_id).first()
+    )
+
+    if not db_user or not db_session:
+        return False
+
+    db_user_session = models.UserSessions(
+        user_id=user_id, session_id=session_id, player_id=player_id
+    )
+    db.add(db_user_session)
+    db.commit()
+    db.refresh(db_user_session)
+    return db_user_session
 
 
 def get_last_event(db: Session, session_id: str):
@@ -491,13 +525,21 @@ def create_game(db: Session, game: schemas.GameCreate):
     return db_game
 
 
-def create_session(db: Session, session: schemas.MWSessionCreate, user_id: int):
+def create_session(
+    db: Session,
+    session: schemas.MWSessionCreate,
+    user_id: int,
+    admins: list[models.User] = [],
+):
     db_session = models.MWSession(**session.model_dump())
     if not user_id:
         raise Exception("User ID is required to create a session")
     db_session.owners.append(
         db.query(models.User).filter(models.User.id == user_id).first()
     )
+    for admin in admins:
+        db_session.owners.append(admin)
+
     db.add(db_session)
     db.commit()
     db.refresh(db_session)

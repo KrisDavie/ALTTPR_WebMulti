@@ -42,6 +42,8 @@ type SRAMLocs = {
 
 const sram_locs: SRAMLocs = {
   0xf50010: ["game_mode", 0x1],
+  0xf50020: ["coords", 0x4],
+  0xf50fff: ["lw_dw", 0x1],
   0xe02000: ["rom_name", 0x15],
   // 0xE02000: ["player_name", 0x15],
   0xf5f000: ["base", 0x256],
@@ -269,6 +271,10 @@ export const sniApiSlice = createApi({
               ]),
             },
           })
+
+          // Add a small pause between items, this should hopefully reduce the chance of duplicate items
+          // The default item get fanfare is ~1.6 seconds
+          await new Promise(r => setTimeout(r, 1000))
 
           queryApi.dispatch(
             log(

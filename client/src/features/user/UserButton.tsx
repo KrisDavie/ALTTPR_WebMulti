@@ -49,7 +49,6 @@ function UserButton() {
 
   // Check for user details when the page loads
   useEffect(() => {
-    console.log("checking for user details")
     if (
       userIdCookie === undefined ||
       (user.id !== 0 && user.id === parseInt(userIdCookie))

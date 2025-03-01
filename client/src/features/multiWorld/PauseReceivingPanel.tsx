@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { pauseReceiving, resumeReceiving } from "./multiworldSlice"
 import _SpriteLocs from "@/../static/sprite_locs.json"
 import { useEffect, useState } from "react"
-import { Event } from "@/app/types"
+import { ItemEvent } from "@/app/types"
 
 type TSpriteLocs = {
   [key: string]: number[]
@@ -19,6 +19,7 @@ function PauseReceivingPanel() {
   const receiving_paused = useAppSelector(
     state => state.multiworld.receiving_paused,
   )
+  const player_id = useAppSelector(state => state.multiworld.player_id)
   const currentQueue = useAppSelector(state => state.sni.itemQueue)
   const [wasPaused, setWasPaused] = useState(false)
 
@@ -34,8 +35,8 @@ function PauseReceivingPanel() {
 
   let withheldItems
 
-  if (receiving_paused || wasPaused) {
-    withheldItems = currentQueue.map((item: Event) => {
+  if ((receiving_paused || wasPaused) && currentQueue.length > 1) {
+    withheldItems = currentQueue.map((item: ItemEvent) => {
       let item_name = item.event_data.item_name
       if (item_name.includes("Crystal")) {
         item_name = ['5', '6'].includes(item_name[8]) ? "Red Crystal" : "Crystal"
@@ -53,15 +54,14 @@ function PauseReceivingPanel() {
             backgroundPositionY: `${posX}px`,
           }}
         ></div>
-      )
-
-      
+      )      
     })
   }
 
   return (
     <div className="flex flex-row flex-wrap align-middle items-center">
       <Button
+        disabled={player_id === undefined || player_id <= 0}
         className="w-32 mt-2"
         onClick={() =>
           receiving_paused
@@ -71,9 +71,7 @@ function PauseReceivingPanel() {
       >
         {receiving_paused ? "Resume Receiving" : "Pause Receiving"}
       </Button>
-      {wasPaused && (
-        <div className="flex flex-row flex-wrap mt-2 ml-2 w-80 h-8 overflow-y-clip">{withheldItems}</div>
-      )}
+      <div className="flex flex-row flex-wrap mt-2 ml-2 w-80 h-8 overflow-y-clip">{withheldItems}</div>
     </div>
   )
 }

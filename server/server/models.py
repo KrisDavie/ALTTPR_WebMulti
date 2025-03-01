@@ -11,7 +11,7 @@ from sqlalchemy import (
     JSON,
     DateTime,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.schema import UniqueConstraint
@@ -19,6 +19,7 @@ import uuid
 import enum
 
 from .database import Base
+from typing import List, Optional
 
 
 class EventTypes(enum.Enum):
@@ -36,7 +37,7 @@ class EventTypes(enum.Enum):
     player_kicked = 12
 
 
-base_flags ={
+base_flags = {
     "chat": True,
     "pauseRecieving": True,
     "missingCmd": True,
@@ -44,74 +45,92 @@ base_flags ={
     "forfeit": True,
 }
 
+
 class Log(Base):
     __tablename__ = "logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
-    session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
-    player_id = Column(Integer, index=True, nullable=True)
-    content = Column(String)
-    session = relationship("MWSession", back_populates="logs")
+    session_id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mwsessions.id")
+    )
+    player_id: Mapped[int] = mapped_column(Integer, index=True, nullable=True)
+    content: Mapped[str] = mapped_column(String)
+    session: Mapped["MWSession"] = relationship("MWSession", back_populates="logs")
 
 
 class User(Base):
     __tablename__ = "users"
 
     # Base required fields
-    id = Column(Integer, primary_key=True, index=True)
-    session_tokens = Column(ARRAY(String), nullable=True)
-    created_at = Column(
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    session_tokens: Mapped[Optional[List[str]]] = mapped_column(
+        ARRAY(String), nullable=True
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
-    is_superuser = Column(Boolean, default=False)
-    bot = Column(Boolean, default=False)
-    username_as_player_name = Column(Boolean, default=False)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    bot: Mapped[bool] = mapped_column(Boolean, default=False)
+    username_as_player_name: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Discord fields
-    discord_id = Column(String, index=True, nullable=True)
-    discord_username = Column(String, index=True, nullable=True)
-    discord_display_name = Column(String, nullable=True)
-    username = Column(String, index=True, nullable=True, unique=True)
-    avatar = Column(String, nullable=True)
-    email = Column(String, unique=True, index=True, nullable=True)
-    refresh_token = Column(String, nullable=True)
+    discord_id: Mapped[Optional[str]] = mapped_column(String, index=True, nullable=True)
+    discord_username: Mapped[Optional[str]] = mapped_column(
+        String, index=True, nullable=True
+    )
+    discord_display_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    username: Mapped[Optional[str]] = mapped_column(
+        String, index=True, nullable=True, unique=True
+    )
+    avatar: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(
+        String, unique=True, index=True, nullable=True
+    )
+    refresh_token: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # Custom fields
-    supporter = Column(Boolean, default=False)
-    colour = Column(String, nullable=True)
+    supporter: Mapped[bool] = mapped_column(Boolean, default=False)
+    colour: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    sessions = relationship(
-        "MWSession", secondary="user_sessions", back_populates="users"
+    sessions: Mapped[List["UserSessions"]] = relationship(back_populates="user")
+
+    owned_sessions: Mapped[List["MWSession"]] = relationship(
+        secondary="owned_sessions", back_populates="owners"
     )
-    owned_sessions = relationship(
-        "MWSession", secondary="owned_sessions", back_populates="owners"
+    events: Mapped[List["Event"]] = relationship("Event", back_populates="user")
+    sramstores: Mapped[List["SRAMStore"]] = relationship(
+        "SRAMStore", back_populates="user"
     )
-    events = relationship("Event", back_populates="user")
-    sramstores = relationship("SRAMStore", back_populates="user")
-    parent_account_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    child_accounts = relationship(
+    parent_account_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    child_accounts: Mapped[List["User"]] = relationship(
         "User", back_populates="parent_account", foreign_keys=[parent_account_id]
     )
-    parent_account = relationship(
+    parent_account: Mapped[Optional["User"]] = relationship(
         "User",
         back_populates="child_accounts",
         foreign_keys=[parent_account_id],
         remote_side=[id],
     )
 
-    bot_owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    bot_owner = relationship(
+    bot_owner_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    bot_owner: Mapped[Optional["User"]] = relationship(
         "User", back_populates="bots", foreign_keys=[bot_owner_id], remote_side=[id]
     )
-    bots = relationship("User", back_populates="bot_owner", foreign_keys=[bot_owner_id])
-    api_keys = relationship(
+    bots: Mapped[List["User"]] = relationship(
+        "User", back_populates="bot_owner", foreign_keys=[bot_owner_id]
+    )
+    api_keys: Mapped[List["APIKey"]] = relationship(
         "APIKey", back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -119,67 +138,80 @@ class User(Base):
 class APIKey(Base):
     __tablename__ = "api_keys"
 
-    id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    description = Column(String, nullable=True)
-    created_at = Column(
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    key: Mapped[str] = mapped_column(String, unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
-    last_used = Column(
+    last_used: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
 
-    user = relationship("User", back_populates="api_keys")
+    user: Mapped["User"] = relationship("User", back_populates="api_keys")
 
 
 class MWSession(Base):
     __tablename__ = "mwsessions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
 
-    game_id = Column(Integer, ForeignKey("games.id"))
-    session_password = Column(String, nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(
+    game_id: Mapped[int] = mapped_column(Integer, ForeignKey("games.id"))
+    session_password: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
-    tournament = Column(Boolean, default=False)
-    owners = relationship(
-        "User", secondary="owned_sessions", back_populates="owned_sessions"
+    tournament: Mapped[bool] = mapped_column(Boolean, default=False)
+    owners: Mapped[List["User"]] = relationship(
+        secondary="owned_sessions", back_populates="owned_sessions"
     )
 
     # Array of discord user ids
-    allowed_users = Column(ARRAY(String), nullable=True)
-    flags = Column(JSON, default=base_flags)
-    mwdata = Column(JSON)
+    allowed_users: Mapped[Optional[List[str]]] = mapped_column(
+        ARRAY(String), nullable=True
+    )
+    flags: Mapped[dict] = mapped_column(JSON, default=base_flags)
+    mwdata: Mapped[dict] = mapped_column(JSON)
 
-    game = relationship("Game", back_populates="mwsessions")
-    logs = relationship("Log", back_populates="session")
-    events = relationship("Event", back_populates="session")
-    sramstores = relationship("SRAMStore", back_populates="session")
-    users = relationship("User", secondary="user_sessions", back_populates="sessions")
+    game: Mapped["Game"] = relationship("Game", back_populates="mwsessions")
+    logs: Mapped[List["Log"]] = relationship("Log", back_populates="session")
+    events: Mapped[List["Event"]] = relationship("Event", back_populates="session")
+    sramstores: Mapped[List["SRAMStore"]] = relationship(
+        "SRAMStore", back_populates="session"
+    )
+    users: Mapped[List["UserSessions"]] = relationship(back_populates="session")
 
 
 class UserSessions(Base):
     __tablename__ = "user_sessions"
-    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    session_id = Column(
-        UUID(as_uuid=True), ForeignKey("mwsessions.id"), primary_key=True
-    )
-    player_id = Column(Integer, nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("mwsessions.id"))
+
+    player_id: Mapped[int] = mapped_column(Integer)
+
+    user: Mapped["User"] = relationship(back_populates="sessions")
+    session: Mapped["MWSession"] = relationship(back_populates="users")
 
 
 class OwnedSessions(Base):
     __tablename__ = "owned_sessions"
-    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    session_id = Column(
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), primary_key=True
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("mwsessions.id"), primary_key=True
     )
 
@@ -187,36 +219,44 @@ class OwnedSessions(Base):
 class Game(Base):
     __tablename__ = "games"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    mwsessions = relationship("MWSession", back_populates="game")
+    mwsessions: Mapped[List["MWSession"]] = relationship(
+        "MWSession", back_populates="game"
+    )
 
 
 class Event(Base):
     __tablename__ = "events"
 
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
-    session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mwsessions.id")
+    )
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
 
-    from_player = Column(Integer, index=True)
-    to_player = Column(Integer, index=True)
-    to_player_idx = Column(Integer, index=True, nullable=True)
-    item_id = Column(Integer, index=True)
-    location = Column(Integer, index=True)
-    event_type = Column(Enum(EventTypes), index=True)
-    frame_time = Column(BigInteger, index=True, nullable=True)
-    event_data = Column(JSON)
+    from_player: Mapped[int] = mapped_column(Integer, index=True)
+    to_player: Mapped[int] = mapped_column(Integer, index=True)
+    to_player_idx: Mapped[Optional[int]] = mapped_column(
+        Integer, index=True, nullable=True
+    )
+    item_id: Mapped[int] = mapped_column(Integer, index=True)
+    location: Mapped[int] = mapped_column(Integer, index=True)
+    event_type: Mapped[EventTypes] = mapped_column(Enum(EventTypes), index=True)
+    frame_time: Mapped[Optional[int]] = mapped_column(BigInteger, index=True, nullable=True)
+    event_data: Mapped[dict] = mapped_column(JSON)
 
-    session = relationship("MWSession", back_populates="events")
-    user = relationship("User", back_populates="events")
+    session: Mapped["MWSession"] = relationship("MWSession", back_populates="events")
+    user: Mapped["User"] = relationship("User", back_populates="events")
     __table_args__ = (
         UniqueConstraint(
             "session_id", "to_player", "to_player_idx", name="player_receive_index"
@@ -227,17 +267,23 @@ class Event(Base):
 class SRAMStore(Base):
     __tablename__ = "sramstores"
 
-    id = Column(Integer, primary_key=True, index=True)
-    updated_at = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.datetime.now,
         server_default=func.clock_timestamp(),
     )
-    session_id = Column(UUID(as_uuid=True), ForeignKey("mwsessions.id"))
-    player = Column(Integer, index=True)
-    sram = Column(JSON())
-    prev_sram = Column(JSON(), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mwsessions.id")
+    )
+    player: Mapped[int] = mapped_column(Integer, index=True)
+    sram: Mapped[dict] = mapped_column(JSON())
+    prev_sram: Mapped[Optional[dict]] = mapped_column(JSON(), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
 
-    session = relationship("MWSession", back_populates="sramstores")
-    user = relationship("User", back_populates="sramstores")
+    session: Mapped["MWSession"] = relationship(
+        "MWSession", back_populates="sramstores"
+    )
+    user: Mapped["User"] = relationship("User", back_populates="sramstores")

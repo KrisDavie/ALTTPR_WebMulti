@@ -34,8 +34,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
     if (!isAction(action)) {
       return next(action)
     }
-
-    const originalState = api.getState()
+    let originalState: RootState
 
     if (reconnect.match(action)) {
       if (socket) {
@@ -50,6 +49,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
       if (socket) {
         return next(action)
       }
+      originalState = api.getState() as RootState
       api.dispatch(
         log(
           `Connecting to multiworld session websocket ${originalState.multiworld.sessionId}`,
@@ -211,6 +211,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
             )
             break
           case "non_player_detected":
+            originalState = api.getState() as RootState
             api.dispatch(
               addEvent({
                 event_type: "chat",
@@ -224,7 +225,7 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
                 id: nanoid(),
               }),
             )
-            if (originalState.user.discordUsername !== "") {
+            if (originalState.user.discordUsername && originalState.user.discordUsername !== "") {
               api.dispatch(
                 addEvent({
                   event_type: "chat",
@@ -266,22 +267,41 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
               id: nanoid(),
             }),
           )
+          if (event.code >= 4400 && event.code < 4500) {
+            api.dispatch(
+              addEvent({
+                event_type: "chat",
+                from_player: -1,
+                to_player: -1,
+                timestamp: Date.now(),
+                event_data: {
+                  message: `Redirecting to home page...`,
+                  type: "error",
+                },
+                id: nanoid(),
+              }),
+            )
+            setTimeout(() => {
+              window.location.href = "/"
+            }, 2000)
+          }
           return
         } else {
           api.dispatch(
-            log(`Connection closed (${event.reason}), reconnecting...`),
+            log(`Connection closed (${event.code}), reconnecting...`),
           )
-          setTimeout(() => {
-            api.dispatch(connect())
-          }, 1000)
+          if (event.code != 1006){
+            setTimeout(() => {
+              api.dispatch(connect())
+            }, 1000)
+          }
         }
       }
     }
     const currentState = api.getState() as RootState
     if (
       socket &&
-      (socket.readyState === WebSocket.CLOSING ||
-        socket.readyState === WebSocket.CLOSED)
+      (socket.readyState === WebSocket.CLOSING)
     ) {
       socket = undefined
       api.dispatch(

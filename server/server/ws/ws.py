@@ -22,7 +22,7 @@ from server import crud, models, schemas, sram
 from server.data import data as loc_data
 from server.logging import logging_config
 from server.dependencies import get_db
-from server.utils import system_chat, sanitize_chat_message, countdown
+from server.utils import system_chat, sanitize_chat_message, countdown, user_allowed_in_session
 
 logger = logging.getLogger(__name__)
 logging.config.dictConfig(logging_config)
@@ -46,14 +46,14 @@ async def websocket_endpoint(
     user_type = None
 
     if not session:
-        await websocket.close(reason="Session not found")
+        await websocket.close(reason="Session not found", code=4404)
         return
 
     # Security check
     if session.session_password != None:
         password = await websocket.receive_text()
         if password != session.session_password:
-            await websocket.close(reason="Invalid password")
+            await websocket.close(reason="Invalid password", code=4403)
             # Log failed join event
             crud.create_event(
                 db,
@@ -72,7 +72,7 @@ async def websocket_endpoint(
     while True:
         try:
             if time.time() - connection_init_time > 600:
-                await websocket.close(reason="Player info not received")
+                await websocket.close(reason="Player info not received", code=4403)
                 return
             player_info = await websocket.receive_json()
             if player_info["type"] == "player_info":
@@ -89,7 +89,7 @@ async def websocket_endpoint(
     try:
         player_id = int(player_info["player_id"])
     except KeyError:
-        await websocket.close(reason="Player info not received")
+        await websocket.close(reason="Player info not received", code=4403)
         return
 
     multidata = session.mwdata
@@ -117,23 +117,28 @@ async def websocket_endpoint(
         },
     )
 
-    if session.allowed_users != None:
-        all_allowed_users = session.allowed_users + [
-            x.discord_id for x in session.owners
-        ]
-        if (
-            not user or user.discord_id not in all_allowed_users
-        ) and not user.is_superuser:
-            await websocket.close(reason="Authorized users only")
-            return
+    allowed = user_allowed_in_session(session, user)
+    if not allowed:
+        await websocket.close(reason="Authorized users only", code=4403)
+        return
 
     if user_type == "player":
         player_name = player_names[player_id - 1]
-        session, user = crud.add_user_to_session(db, session, user, player_id)
+
+        user_session_links = crud.get_user_session_links(db, session.id)
+        player_links = [x for x in user_session_links if x.player_id == player_id]
+        player_link = player_links[0] if len(player_links) > 0 else None
+
+        if player_link and user and player_link.user_id != user.id:
+            await websocket.close(reason=f"Player {player_id} already claimed!", code=4409)
+
+        # Only allow players to be locked by logged in users
+        if not player_link and user and user.discord_id != None:
+            session, user = crud.add_user_to_session(db, session.id, user.id, player_id)
 
     elif user_type == "non_player":
         if not user:
-            await websocket.close(reason="No user info detected")
+            await websocket.close(reason="No user info detected", code=4401)
             return
         player_id = -2
         player_name = user.username
@@ -146,7 +151,7 @@ async def websocket_endpoint(
         and conn_events[0].event_type == models.EventTypes.player_join
     ):
         logger.warning(f"{player_name} already joined")
-        await websocket.close(reason="Player already joined")
+        await websocket.close(reason="Player already joined", code=4409)
         return
 
     # Log join event
@@ -379,7 +384,7 @@ async def websocket_endpoint(
                 # We do this at the end, so that we can include the kicked message as an event.
                 # We'll use this on the frontend to close the connection and direct the user away from the session
                 if should_close:
-                    await websocket.close()
+                    await websocket.close(reason="Should close", code=4400)
                     raise WebSocketDisconnect
 
             # Wait for a message from the client, but only for 1.5 seconds, then we loop back to the top and process events from other players
@@ -566,6 +571,24 @@ async def websocket_endpoint(
                             event_data={"player_id": player_to_kick},
                         ),
                     )
+                    await time.sleep(2.0)
+                    conn_events = crud.get_player_connection_events(db, session.id, player_to_kick)
+                    if (
+                        len(conn_events) > 0
+                        and conn_events[0].event_type == models.EventTypes.player_join
+                    ):
+                        ev = crud.create_event(
+                            db,
+                            schemas.EventCreate(
+                                session_id=session.id,
+                                event_type=models.EventTypes.player_leave,
+                                from_player=player_id,
+                                to_player=-1,
+                                item_id=-1,
+                                location=-1,
+                                event_data={"player_id": player_id, "player_name": player_name},
+                            ),
+                        )
                     continue
 
             elif payload["type"] == "update_memory":

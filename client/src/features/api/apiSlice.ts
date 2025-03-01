@@ -120,6 +120,9 @@ export const apiSlice = createApi({
     getPlayers: builder.query({
       query: sessionId => `/session/${sessionId}/players`,
     }),
+    getPlayersInfo: builder.query<IPlayerInfo[], string>({
+      query: sessionId => `/session/${sessionId}/players/info`,
+    }),
     getUserName: builder.query({
       query: userId => `/users/${userId}/username`,
     }),
@@ -179,6 +182,7 @@ export const {
   useSendForfeitMutation,
   useSendLogMessageMutation,
   useGetPlayersQuery,
+  useGetPlayersInfoQuery,
   useGetSessionQuery,
   useGetAllSessionsQuery,
   useLazyGetPlayersQuery,

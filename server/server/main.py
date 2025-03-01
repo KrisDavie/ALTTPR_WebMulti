@@ -26,6 +26,7 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse
 from typing import Annotated
+from server.utils import get_session_players_info_from_db, user_allowed_in_session
 from starlette import status
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
@@ -470,39 +471,11 @@ def get_user(
 def get_session_info(
     db: Annotated[Session, Depends(get_db)], session: schemas.MWSession, user_id: int
 ):
-    player_srams = [
-        crud.get_sramstore(db, session.id, x + 1)
-        for x in range(len(session.mwdata["names"][0]))
-    ]
+    player_datas = get_session_players_info_from_db(db, session)
     last_updated = crud.get_last_event(db, session.id).timestamp.timestamp()
     if not last_updated:
         last_updated = session.created_at.timestamp()
-    player_datas = []
-    players_tot_cr = defaultdict(int)
-    for loc in session.mwdata["locations"]:
-        players_tot_cr[loc[0][1]] += 1
-
-    for player_id, (player_name, player_sram) in enumerate(
-        zip(session.mwdata["names"][0], player_srams)
-    ):
-        if not player_sram:
-            cr = 0
-            goal_completed = False
-        else:
-            sram = json.loads(player_sram.sram)
-            cr = int.from_bytes(sram["inventory"][0xE3:0xE5], "little")
-            goal_completed = bool(sram["inventory"][0x103])
-        player_datas.append(
-            schemas.PlayerInfo(
-                playerNumber=player_id + 1,
-                playerName=player_name,
-                collectionRate=cr,
-                totalLocations=players_tot_cr[player_id + 1],
-                goalCompleted=goal_completed,
-                curCoords=[0, 0],
-                userId=None,
-            )
-        )
+        
     TIME_TO_IDLE = datetime.timedelta(days=2)
 
     tot_complete = all([x.goalCompleted for x in player_datas])
@@ -579,7 +552,9 @@ def create_multi_session(
     game: Annotated[str, Form()] = "z3",
     tournament: Annotated[bool, Form()] = False,
     flags: Annotated[str, Form()] = "{}",
-    password: Annotated[str, Form()] = None,
+    admins: Annotated[str, Form()] = "",
+    allowed_users: Annotated[str, Form()] = "",
+    password: Annotated[str, Form()] = "",
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
 ):
     # Accept form multi-data
@@ -592,6 +567,9 @@ def create_multi_session(
     multidata = file
     db_game = crud.get_game(db, game)
     user, _ = user_info
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
     if not db_game:
         db_game = crud.create_game(db, schemas.GameCreate(title=game))
@@ -616,6 +594,15 @@ def create_multi_session(
             raise HTTPException(status_code=400, detail=f"Invalid flag: {key}")
         final_flags[key] = value
 
+    admin_users = []
+    if admins:
+        for x in admins.split(","):
+            try:
+                admin_user = crud.get_user_by_discord_id(db, x)
+                admin_users.append(admin_user)
+            except:
+                return {"error": f"User {x} not found!"}
+
     # Create a session for the game
     session = crud.create_session(
         db,
@@ -626,8 +613,10 @@ def create_multi_session(
             session_password=password if password else None,
             tournament=tournament,
             flags=final_flags,
+            allowed_users=allowed_users.split(",") if allowed_users else None,
         ),
         user.id,
+        admin_users #Specified as a list of users, added after the owner
     )
 
     create_event = crud.create_event(
@@ -660,14 +649,9 @@ def get_session_events(
     session = crud.get_session(db, mw_session_id)
     user, token = user_info
 
-    if session.allowed_users != None:
-        all_allowed_users = session.allowed_users + [
-            x.discord_id for x in session.owners
-        ]
-        if (
-            not user or user.discord_id not in all_allowed_users
-        ) and not user.is_superuser:
-            raise HTTPException(status_code=403, detail="Unauthorized")
+    allowed = user_allowed_in_session(session, user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Authorized users only")
 
     all_events = crud.get_events(db, session_id=mw_session_id)
     for event in all_events:
@@ -690,6 +674,27 @@ def get_session_players(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session.mwdata["names"][0]
+
+
+@app.get("/session/{mw_session_id}/players/info")
+def get_session_players_info(
+    mw_session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+) -> list[schemas.PlayerInfo]:
+    
+    session = crud.get_session(db, mw_session_id)
+    user, token = user_info
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    allowed = user_allowed_in_session(session, user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Authorized users only")
+        
+    player_datas = get_session_players_info_from_db(db, session)
+    
+    return player_datas
 
 
 @app.post("/session/{mw_session_id}/adminSend")

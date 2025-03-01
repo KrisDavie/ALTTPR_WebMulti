@@ -32,14 +32,20 @@ import { useGetAllSessionsQuery } from "@/features/api/apiSlice"
 import { useAppSelector } from "@/app/hooks"
 import { LoadingSpinner } from "../../components/ui/spinner"
 
-interface IPlayer {
+export interface IPlayerInfo {
   playerNumber: number
   playerName: string
   collectionRate: number
   totalLocations: number
   goalCompleted: boolean
   curCoords: [number, number]
+  world: "EG1" | "EG2" | "LW" | "DW"
+  health: number
+  maxHealth: number
   userId?: number
+  usernameAsPlayerName?: boolean
+  userName?: string
+  colour?: string
 }
 
 export interface IFeatures {
@@ -52,7 +58,7 @@ export interface IFeatures {
 
 export interface ISession {
   id: string
-  players: IPlayer[]
+  players: IPlayerInfo[]
   status: "active" | "idle" | "completed" // idle if no events in last 1 hour
   owner: [string, number] // userId
   admins?: [string, number][] // userIds

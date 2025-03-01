@@ -140,6 +140,8 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     )
   }
 
+  const canSendMessages = (initComplete && currentPlayer && currentPlayer >= 0) || user.discordUsername
+
   const renderEvents = useCallback((event: Event) => (
     <MultiEventText key={event.id} event={event} players={players} />
   ), [players])
@@ -148,13 +150,13 @@ function MultiEventViewer(props: MultiEventViewerProps) {
 
   return (
     <div className="flex flex-col max-w-6xl mt-2">
-      <div className="h-72 w-4/5 rounded-md border relative">
+      <div className="h-72 rounded-md border relative">
         <Popover>
           <PopoverTrigger asChild>
             <Button
               size="icon"
               className={
-                "h-8 w-8 absolute top-3 right-3 opacity-50 z-10" +
+                "h-8 w-8 absolute top-3 right-3 opacity-75 z-10" +
                 (allEventsFiltered() ? " bg-red-500" : "")
               }
             >
@@ -243,22 +245,22 @@ function MultiEventViewer(props: MultiEventViewerProps) {
       </div>
       <form
         id="chatBox"
-        className="h-8 w-4/5 mt-2 rounded-md flex flex-row"
+        className="h-8 mt-2 rounded-md flex flex-row"
         onSubmit={handleChatSubmit}
       >
         <Input
           type="text"
-          className="h-8 w-11/12 rounded-md flex mr-1"
-          disabled={!initComplete && !user.discordUsername}
+          className="h-8 rounded-md flex mr-1"
+          disabled={!canSendMessages}
           placeholder={
-            initComplete || user.discordUsername
+            canSendMessages
               ? "Send a message..."
               : "Cannot send messages until connected or logged in with discord..."
           }
           value={chatMessage}
           onChange={e => setChatMessage(e.target.value)}
         />
-        <Button className="h-8 w-1/12 rounded-md flex" disabled={!initComplete && !user.discordUsername}>
+        <Button className="h-8 w-1/12 rounded-md flex" disabled={!canSendMessages}>
           Send
         </Button>
       </form>

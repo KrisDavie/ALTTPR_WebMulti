@@ -1,5 +1,5 @@
 import datetime
-from typing import List
+from typing import List, Literal
 from pydantic import BaseModel
 
 import uuid
@@ -81,7 +81,6 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
-
 class APIKeyBase(BaseModel):
     description: str | None = None
 
@@ -147,6 +146,7 @@ class MWSessionBase(BaseModel):
     is_active: bool
     mwdata: dict | None = None
     flags: dict | None = None
+    allowed_users: List[str] | None = []
 
 
 class MWSessionCreate(MWSessionBase):
@@ -159,7 +159,6 @@ class MWSession(MWSessionBase):
     id: uuid.UUID
     created_at: datetime.datetime
     game: Game
-    allowed_users: List[str] = []
 
     class Config:
         from_attributes = True
@@ -191,14 +190,36 @@ class SRAMStore(SRAMStoreBase):
     class Config:
         from_attributes = True
 
+
+class UserSession(BaseModel):
+    id: int
+    user_id: int
+    session_id: uuid.UUID
+
+    class Config:
+        from_attributes = True
+
+
+class UserSessionCreate(UserSession):
+    player_id: int | None = None
+    pass
+
+
 class PlayerInfo(BaseModel):
     playerNumber: int
     playerName: str
+    connected: bool
     collectionRate: int
     totalLocations: int
     goalCompleted: bool
     curCoords: list[int]
+    world: Literal["EG1", "EG2", "LW", "DW"]
+    health: float
+    maxHealth: float
     userId: int | None = None
+    usernameAsPlayerName: bool = False
+    userName: str | None = None
+    colour: str | None = None
 
 class Features(BaseModel):
     chat: bool

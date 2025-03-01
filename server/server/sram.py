@@ -6,6 +6,10 @@ logger = logging.getLogger(__name__)
 
 
 def sram_diff(new_sram: dict, old_sram: dict) -> dict:
+    # Support for adding new SRAM locs
+    for k, v in new_sram.items():
+        if k not in old_sram:
+            old_sram[k] = [0] * len(v)
     return {
         k: {
             ix: dv
