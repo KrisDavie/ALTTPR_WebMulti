@@ -709,7 +709,7 @@ def get_session_players_info(
 @app.post("/session/{mw_session_id}/adminSend")
 def admin_send_event(
     mw_session_id: str,
-    send_data: dict,
+    send_data: Annotated[dict, Body()],
     db: Annotated[Session, Depends(get_db)],
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
