@@ -9,7 +9,7 @@ const baseUrl = "/api/v1"
 export const apiSlice = createApi({
   baseQuery: fetchBaseQuery({ baseUrl, credentials: "include" }),
   reducerPath: "api",
-  tagTypes: ["User", "Sessions"],
+  tagTypes: ["User", "Sessions", "PlayerInfo"],
   endpoints: builder => ({
     uploadMultiData: builder.mutation({
       query: ({ data, tournament, flags }) => {
@@ -66,7 +66,7 @@ export const apiSlice = createApi({
           body: body,
         }
       },
-      invalidatesTags: ["User"],
+      invalidatesTags: ["User", "PlayerInfo"],
     }),
     createBot: builder.mutation<UserState, string>({
       query: botName => {
@@ -119,6 +119,8 @@ export const apiSlice = createApi({
     }),
     getPlayers: builder.query<Array<Array<string>>, string>({
       query: sessionId => `/session/${sessionId}/players`,
+      providesTags: ["PlayerInfo"],
+  
     }),
     getPlayersInfo: builder.query<IPlayerInfo[], string>({
       query: sessionId => `/session/${sessionId}/players/info`,

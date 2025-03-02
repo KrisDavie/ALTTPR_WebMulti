@@ -36,20 +36,26 @@ function MultiEventText(props: MultiEventTextProps) {
       from_player_name = (userName && userName["username"]) || "Unknown Player"
       break
     default:
-      if (finalPlayerNames[from_player - 1] === originalPlayerNames[from_player - 1]) {
-        from_player_name = finalPlayerNames[from_player - 1]
-      } else {
         from_player_name = (
-          <span title={originalPlayerNames[from_player - 1]}>
+          <span title={`${originalPlayerNames[from_player - 1]} (Player ${from_player})`}>
             {finalPlayerNames[from_player - 1]}
           </span>
         )
-      }
       break
   }
 
-  const to_player_name =
-    to_player >= 1 ? finalPlayerNames[to_player - 1] : "Unknown Player"
+  let to_player_name: string | ReactElement = "" 
+
+  if (to_player >= 1) {
+      to_player_name = (
+        <span title={`${originalPlayerNames[to_player - 1]} (Player ${to_player})`}>
+          {finalPlayerNames[to_player - 1]}
+        </span>
+      )
+  } else {
+    to_player_name = "Unknown Player"
+  }
+
 
   const key_items = [
     "Bow",

@@ -12,7 +12,7 @@ function MultiPlayerList() {
   return (
     <div className="flex flex-col space-y-2 mt-2">
       {playerInfo?.map(player => {
-        const name = player.usernameAsPlayerName
+        const name = player.userName
           ? `${player.userName} (${player.playerName})`
           : player.playerName
         return (

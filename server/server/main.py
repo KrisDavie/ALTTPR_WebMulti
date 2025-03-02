@@ -344,7 +344,7 @@ def auth_user(
 
 
 @app.post("/users/update", response_model=schemas.User)
-def set_username(
+def update_user_info(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
@@ -354,7 +354,7 @@ def set_username(
     user, token = user_info
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    if username is not None:
+    if username is not None and username != user.username:
         existing_user = crud.get_user_by_username(db, username)
         if existing_user:
             raise HTTPException(status_code=409, detail="Username already exists")
