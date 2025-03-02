@@ -16,7 +16,7 @@ import * as z from "zod"
 
 import { cn } from "@/lib/utils"
 
-import { CaretSortIcon, CheckIcon } from "@radix-ui/react-icons"
+import { CaretSortIcon } from "@radix-ui/react-icons"
 import {
   Popover,
   PopoverContent,
@@ -29,11 +29,11 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command"
 import { useState } from "react"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@radix-ui/react-scroll-area"
 
 interface IItems {
   [index: string]: number | number[]
@@ -49,8 +49,9 @@ function ItemSender(props: ItemSenderProps) {
   const { sessionId } = props
   const [sendItems] = useSendNewItemsMutation()
   const { isLoading, data: players } = useGetPlayersQuery(sessionId)
-  const originalPlayerNames = players ? players.map((pnames: string[]) => pnames[1]) : []
-
+  const originalPlayerNames = players
+    ? players.map((pnames: string[]) => pnames[1])
+    : []
 
   const [itemPopoverOpen, setItemPopoverOpen] = useState(false)
 
@@ -70,7 +71,9 @@ function ItemSender(props: ItemSenderProps) {
   })
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    const playerIdxs = data.players.map(player => originalPlayerNames.findIndex((p: string) => p === player) + 1)
+    const playerIdxs = data.players.map(
+      player => originalPlayerNames.findIndex((p: string) => p === player) + 1,
+    )
     sendItems({
       sessionId,
       itemId: items[data.item] as number,
@@ -121,8 +124,8 @@ function ItemSender(props: ItemSenderProps) {
                         placeholder="Search Items..."
                         className="h-9"
                       />
-                      <CommandEmpty>No item found.</CommandEmpty>
-                      <ScrollArea className='flex max-h-44' >
+                      <CommandList>
+                        <CommandEmpty>No item found.</CommandEmpty>
                         <CommandGroup>
                           {Object.keys(items).map(item => (
                             <CommandItem
@@ -134,18 +137,10 @@ function ItemSender(props: ItemSenderProps) {
                               }}
                             >
                               {item}
-                              <CheckIcon
-                                className={cn(
-                                  "ml-auto h-4 w-4",
-                                  item === field.value
-                                    ? "opacity-100"
-                                    : "opacity-0",
-                                )}
-                              />
                             </CommandItem>
                           ))}
                         </CommandGroup>
-                     </ScrollArea>
+                      </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
@@ -165,14 +160,17 @@ function ItemSender(props: ItemSenderProps) {
                     onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
-                    {!isLoading && players &&
+                    {!isLoading &&
+                      players &&
                       players.map((player: string[], ix: number) => (
                         <ToggleGroupItem
                           variant="outline"
                           key={ix}
                           value={player[1]}
                         >
-                          {player[0] === player[1] ? player[0] : `${player[0]} (${player[1]})`}
+                          {player[0] === player[1]
+                            ? player[0]
+                            : `${player[0]} (${player[1]})`}
                         </ToggleGroupItem>
                       ))}
                   </ToggleGroup>
@@ -180,7 +178,7 @@ function ItemSender(props: ItemSenderProps) {
               </FormItem>
             )}
           />
-          <Separator orientation="vertical"/>
+          <Separator orientation="vertical" />
 
           <FormField
             control={form.control}

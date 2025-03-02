@@ -216,13 +216,13 @@ export const columns: ColumnDef<ISession>[] = [
             >
               Copy Session ID
             </DropdownMenuItem>
-            {
+            {/* {
               <DropdownMenuItem
                 disabled={!(admins?.includes(user.id) || user.superUser)}
               >
                 Add/Remove Admin
               </DropdownMenuItem>
-            }
+            } */}
           </DropdownMenuContent>
         </DropdownMenu>
       )

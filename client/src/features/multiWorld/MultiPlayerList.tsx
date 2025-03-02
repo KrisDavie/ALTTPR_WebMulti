@@ -7,6 +7,7 @@ function MultiPlayerList() {
   )
   const playerInfo = useGetPlayersInfoQuery(sessionId, {
     pollingInterval: 1000,
+    skip: !sessionId,
   }).data
 
   return (
