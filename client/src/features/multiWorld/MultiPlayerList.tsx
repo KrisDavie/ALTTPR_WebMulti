@@ -17,7 +17,7 @@ function MultiPlayerList() {
           : player.playerName
         return (
           <div key={player.playerNumber}>
-            {player.playerNumber}: {name} ({player.health}/{player.maxHealth} {"❤️"}) - CR:{" "}
+            {player.playerNumber}: {name} ({player.health}/{player.maxHealth} {"❤️"}) - {player.world} - CR:{" "}
             {player.collectionRate}
           </div>
         )

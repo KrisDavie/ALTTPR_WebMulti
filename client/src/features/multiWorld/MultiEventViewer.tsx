@@ -142,9 +142,13 @@ function MultiEventViewer(props: MultiEventViewerProps) {
 
   const canSendMessages = (initComplete && currentPlayer && currentPlayer >= 0) || user.discordUsername
 
-  const renderEvents = useCallback((event: Event) => (
-    <MultiEventText key={event.id} event={event} players={players} />
-  ), [players])
+  const renderEvents = useCallback((event: Event) => {
+    const originalPlayerNames = players ? players.map((pnames: string[]) => pnames[1]) : []
+    const finalPlayerNames = players ? players.map((pnames: string[]) => pnames[0]) : []
+    return (
+  
+    <MultiEventText key={event.id} event={event} originalPlayerNames={originalPlayerNames} finalPlayerNames={finalPlayerNames}  />
+  )}, [players])
 
   const renderedEvents = filteredEvents.map(renderEvents)
 

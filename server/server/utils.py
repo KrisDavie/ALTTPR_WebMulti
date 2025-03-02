@@ -10,6 +10,7 @@ from typing import Annotated
 from . import models, schemas, crud
 from .dependencies import get_db
 
+from .data.data import DUNGEON_IDS
 
 def system_chat(
     message: str,
@@ -148,8 +149,8 @@ def get_session_players_info_from_db(
 
         if player_sram:
             sram = json.loads(player_sram.sram)
-            game_mode = sram["game_mode"]
-            lw_dw = sram.get("lw_dw", 0x00)
+            game_mode = sram["game_mode"][0]
+            lw_dw = sram.get("lw_dw", 0x00)[0]
             cr = int.from_bytes(sram["inventory"][0xE3:0xE5], "little")
             goal_completed = bool(sram["inventory"][0x103])
             x = int.from_bytes(sram.get("coords", b"0000")[0:2], "little")
@@ -157,11 +158,11 @@ def get_session_players_info_from_db(
             coords = [x, y]
 
             if game_mode == 0x07:
-                if y > 8192:
+                if x > 8192:
                     world = "EG2"
-                    y -= 8192
+                    x -= 8192
                 else:
-                    world = "EG1"
+                    world = DUNGEON_IDS.get(int.from_bytes(sram["dungeon_id"], "little"), "EG1")
             elif game_mode == 0x09:
                 if lw_dw == 0x00:
                     world = "LW"

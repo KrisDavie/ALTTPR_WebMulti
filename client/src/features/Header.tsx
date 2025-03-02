@@ -127,7 +127,14 @@ function Header() {
     } else if (!player_id || !players.data) {
       text = "Connected to " + sessionId
     } else if (player_type === "player") {
-      text = "Connected to " + sessionId + " as " + players.data[player_id - 1]
+      const player_names = players.data[player_id - 1]
+      let player_name
+      if (player_names[0] === player_names[1]) {
+        player_name = player_names[0]
+      } else {
+        player_name = player_names[1] + " (" + player_names[0] + ")"
+      }
+      text = "Connected to " + sessionId + " as " + player_name
     } else if (player_type === "non_player") {
       text = "Connected to " + sessionId + " as " + user.username + " (Non-player)"
     }

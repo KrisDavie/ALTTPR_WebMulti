@@ -25,10 +25,23 @@ for kind, kind_data in location_info.items():
         for name, (screen, mask) in kind_data.items():
             location_info_by_ow_screen[kind][screen].append((name, mask))
     
-
-
-
-
 lookup_id_to_name['0'] = "Admin Send"
 lookup_name_to_id = {v: k for k, v in lookup_id_to_name.items()}
 item_table_reversed = {v: k for k, v in item_table.items()}
+
+DUNGEON_IDS = {
+    0: "HC" ,
+    2: "HC" ,
+    4: "EP" ,
+    6: "DP" ,
+    8: "AT" ,
+    10: "SP" ,
+    12: "PD" ,
+    14: "MM" ,
+    16: "SW" ,
+    18: "IP" ,
+    20: "TH" ,
+    22: "TT" ,
+    24: "TR" ,
+    26: "GT"
+}

@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react"
 import { APIKey, Event } from "@/app/types"
 import { EventTypes } from "@/app/types"
-import { ISession } from "@/features/dashboard/MultiworldSessions"
+import { IPlayerInfo, ISession } from "@/features/dashboard/MultiworldSessions"
 import { UserState } from "../user/userSlice"
 
 const baseUrl = "/api/v1"
@@ -117,7 +117,7 @@ export const apiSlice = createApi({
         return transformedResponse
       },
     }),
-    getPlayers: builder.query({
+    getPlayers: builder.query<Array<Array<string>>, string>({
       query: sessionId => `/session/${sessionId}/players`,
     }),
     getPlayersInfo: builder.query<IPlayerInfo[], string>({

@@ -1,16 +1,17 @@
 import { Event } from "@/app/types"
 import { cn } from "@/lib/utils"
-import { JSX } from "react"
+import { JSX, ReactElement } from "react"
 import { useGetUserNameQuery } from "../api/apiSlice"
 import { skipToken } from "@reduxjs/toolkit/query"
 
 interface MultiEventTextProps {
   event: Event
-  players: string[]
+  originalPlayerNames: string[]
+  finalPlayerNames: string[]
 }
 
 function MultiEventText(props: MultiEventTextProps) {
-  const { event, players } = props
+  const { event, originalPlayerNames, finalPlayerNames} = props
 
   const { from_player, to_player, timestamp, event_data } = event
   const { data: userName } = useGetUserNameQuery(
@@ -19,9 +20,13 @@ function MultiEventText(props: MultiEventTextProps) {
       : skipToken,
   )
   const event_type = event["event_type"]
-  const dt = new Date(timestamp)
+  const dto = new Date(timestamp)
+  const dt = (
+    <span title={dto.toLocaleString()}>{dto.toLocaleTimeString()}</span>
+  )
 
-  let from_player_name = ""
+
+  let from_player_name: string | ReactElement = "" 
 
   switch (from_player) {
     case -1:
@@ -31,12 +36,20 @@ function MultiEventText(props: MultiEventTextProps) {
       from_player_name = (userName && userName["username"]) || "Unknown Player"
       break
     default:
-      from_player_name = players[from_player - 1]
+      if (finalPlayerNames[from_player - 1] === originalPlayerNames[from_player - 1]) {
+        from_player_name = finalPlayerNames[from_player - 1]
+      } else {
+        from_player_name = (
+          <span title={originalPlayerNames[from_player - 1]}>
+            {finalPlayerNames[from_player - 1]}
+          </span>
+        )
+      }
       break
   }
 
   const to_player_name =
-    to_player >= 1 ? players[to_player - 1] : "Unknown Player"
+    to_player >= 1 ? finalPlayerNames[to_player - 1] : "Unknown Player"
 
   const key_items = [
     "Bow",
@@ -119,7 +132,7 @@ function MultiEventText(props: MultiEventTextProps) {
     case "init_success":
       final_content = (
         <>
-          [{dt.toLocaleString()}] Successfully connected to the multiworld
+          [{dt}] Successfully connected to the multiworld
           server as {from_player_name}
         </>
       )
@@ -127,35 +140,35 @@ function MultiEventText(props: MultiEventTextProps) {
     case "player_join":
       final_content = (
         <>
-          [{dt.toLocaleString()}] {from_player_name} joined the game
+          [{dt}] {from_player_name} joined the game
         </>
       )
       break
     case "player_leave":
       final_content = (
         <>
-          [{dt.toLocaleString()}] {from_player_name} left the game
+          [{dt}] {from_player_name} left the game
         </>
       )
       break
     case "player_forfeit":
       final_content = (
         <>
-          [{dt.toLocaleString()}] {from_player_name} forfeited!
+          [{dt}] {from_player_name} forfeited!
         </>
       )
       break
     case "player_pause_receive":
       final_content = (
         <>
-          [{dt.toLocaleString()}] {from_player_name} paused item receiving
+          [{dt}] {from_player_name} paused item receiving
         </>
       )
       break
     case "player_resume_receive":
       final_content = (
         <>
-          [{dt.toLocaleString()}] {from_player_name} resumed item receiving
+          [{dt}] {from_player_name} resumed item receiving
         </>
       )
       break
@@ -166,7 +179,7 @@ function MultiEventText(props: MultiEventTextProps) {
       }
       final_content = (
         <>
-          [{dt.toLocaleString()}] Session {event_data["session_id"]} created
+          [{dt}] Session {event_data["session_id"]} created
         </>
       )
       break
@@ -189,7 +202,7 @@ function MultiEventText(props: MultiEventTextProps) {
                 : "",
           )}
         >
-          [{dt.toLocaleString()}]{" "}
+          [{dt}]{" "}
           <span className="font-bold">{from_player_name}</span>:{" "}
           {event_data["message"]}
         </div>
@@ -204,7 +217,7 @@ function MultiEventText(props: MultiEventTextProps) {
       key = `${event.event_historical ? "old_" : ""}${event.id}_item`
       final_content = (
         <>
-          [{dt.toLocaleString()}] New Item:{" "}
+          [{dt}] New Item:{" "}
           <span
             className={`${key_items.includes(item_name) ? "font-bold" : ""}`}
           >
@@ -219,7 +232,7 @@ function MultiEventText(props: MultiEventTextProps) {
     default:
       final_content = (
         <>
-          [{dt.toLocaleString()}] Unknown event type: {event_type}
+          [{dt}] Unknown event type: {event_type}
         </>
       )
       return

@@ -49,6 +49,8 @@ function ItemSender(props: ItemSenderProps) {
   const { sessionId } = props
   const [sendItems] = useSendNewItemsMutation()
   const { isLoading, data: players } = useGetPlayersQuery(sessionId)
+  const originalPlayerNames = players ? players.map((pnames: string[]) => pnames[1]) : []
+
 
   const [itemPopoverOpen, setItemPopoverOpen] = useState(false)
 
@@ -68,7 +70,7 @@ function ItemSender(props: ItemSenderProps) {
   })
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    const playerIdxs = data.players.map(player => players.findIndex((p: string) => p === player) + 1)
+    const playerIdxs = data.players.map(player => originalPlayerNames.findIndex((p: string) => p === player) + 1)
     sendItems({
       sessionId,
       itemId: items[data.item] as number,
@@ -163,14 +165,14 @@ function ItemSender(props: ItemSenderProps) {
                     onValueChange={field.onChange}
                     defaultValue={field.value}
                   >
-                    {!isLoading &&
-                      players.map((player: string, ix: number) => (
+                    {!isLoading && players &&
+                      players.map((player: string[], ix: number) => (
                         <ToggleGroupItem
                           variant="outline"
                           key={ix}
-                          value={player}
+                          value={player[1]}
                         >
-                          {player}
+                          {player[0] === player[1] ? player[0] : `${player[0]} (${player[1]})`}
                         </ToggleGroupItem>
                       ))}
                   </ToggleGroup>

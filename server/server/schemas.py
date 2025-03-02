@@ -213,7 +213,7 @@ class PlayerInfo(BaseModel):
     totalLocations: int
     goalCompleted: bool
     curCoords: list[int]
-    world: Literal["EG1", "EG2", "LW", "DW"]
+    world: Literal["EG1", "EG2", "LW", "DW", "HC", "EP", "DP", "AT", "SP", "PD", "MM", "SW", "IP", "TH", "TT", "TR", "GT"]
     health: float
     maxHealth: float
     userId: int | None = None

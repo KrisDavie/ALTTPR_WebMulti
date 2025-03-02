@@ -39,7 +39,7 @@ export interface IPlayerInfo {
   totalLocations: number
   goalCompleted: boolean
   curCoords: [number, number]
-  world: "EG1" | "EG2" | "LW" | "DW"
+  world: "EG1" | "EG2" | "LW" | "DW" | "HC" | "EP" | "DP" | "AT" | "SP" | "PD" | "MM" | "SW" | "IP" | "TH" | "TT" | "TR" | "GT"
   health: number
   maxHealth: number
   userId?: number

@@ -48,6 +48,7 @@ type SRAMLocs = {
 const sram_locs: SRAMLocs = {
   0xf50010: ["game_mode", 0x1],
   0xf50020: ["coords", 0x4],
+  0xf5040c: ["dungeon_id", 0x1],
   0xf50fff: ["lw_dw", 0x1],
   0xe02000: ["rom_name", 0x15],
   // 0xE02000: ["player_name", 0x15],

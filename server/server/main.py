@@ -669,11 +669,20 @@ def get_session_events(
 @app.get("/session/{mw_session_id}/players")
 def get_session_players(
     mw_session_id: str, db: Annotated[Session, Depends(get_db)]
-) -> list[str]:
+) -> list[list[str]]:
     session = crud.get_session(db, mw_session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return session.mwdata["names"][0]
+
+    player_session_links = crud.get_user_session_links(db, session.id)
+    player_name_dict = {
+        x.player_id: x.user.username
+        for x in player_session_links if x.user and x.user.username_as_player_name
+    }
+    final_names = []
+    for player_id, name in enumerate(session.mwdata["names"][0]):
+        final_names.append([player_name_dict.get(player_id + 1, name), name])
+    return final_names
 
 
 @app.get("/session/{mw_session_id}/players/info")
