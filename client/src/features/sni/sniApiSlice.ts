@@ -33,7 +33,12 @@ import { log } from "../loggerSlice"
 import type { AppDispatch } from "@/app/store"
 import { UserState } from "../user/userSlice"
 
-export const ingame_modes = [0x07, 0x09, 0x0b]
+export const ingame_modes = [
+  0x07, // Dungeon
+  0x09, // Overworld 
+  0x0b, // Special overworld
+  0x19 // Triforce room
+]
 const save_quit_modes = [0x00, 0x01, 0x17, 0x1b]
 
 type SRAMLocs = {
