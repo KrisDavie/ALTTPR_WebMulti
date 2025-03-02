@@ -322,9 +322,17 @@ def get_sessions(db: Session, skip: int = 0, limit: int = 0, game_id: int = 1):
 
 def get_user_sessions(db: Session, user_id: int, skip: int = 0, limit: int = 0):
     # Owned and joined sessions
-    all_sessions = db.query(models.MWSession).filter(
-        models.MWSession.owners.any(models.User.id == user_id)
-        | models.MWSession.users.any(models.User.id == user_id)
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    bot_ids = [bot.id for bot in user.bots] if user and user.bots else []
+
+    all_sessions = db.query(models.MWSession).outerjoin(
+        models.UserSessions, models.MWSession.id == models.UserSessions.session_id
+    ).outerjoin(models.User, models.User.id == models.UserSessions.user_id).filter(
+        or_(
+            models.MWSession.owners.any(models.User.id == user_id),
+            models.UserSessions.user_id == user_id,
+            models.MWSession.owners.any(models.User.id.in_(bot_ids))
+        )
     )
     if limit <= 0:
         return all_sessions.offset(skip).all()

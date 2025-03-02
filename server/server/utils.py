@@ -150,7 +150,7 @@ def get_session_players_info_from_db(
         if player_sram:
             sram = json.loads(player_sram.sram)
             game_mode = sram["game_mode"][0]
-            lw_dw = sram.get("lw_dw", 0x00)[0]
+            lw_dw = sram.get("lw_dw", [0x00])[0]
             cr = int.from_bytes(sram["inventory"][0xE3:0xE5], "little")
             goal_completed = bool(sram["inventory"][0x103])
             x = int.from_bytes(sram.get("coords", b"0000")[0:2], "little")
