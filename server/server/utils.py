@@ -185,7 +185,7 @@ def get_session_players_info_from_db(
                 playerName=player_name,
                 connected=connected,
                 collectionRate=cr,
-                totalLocations=players_tot_cr[player_id - 1],
+                totalLocations=players_tot_cr[player_id],
                 goalCompleted=goal_completed,
                 curCoords=coords,
                 world=world,

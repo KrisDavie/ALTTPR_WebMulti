@@ -544,6 +544,19 @@ def get_user_sessions(
     return sessions
 
 
+def is_multidata_valid(multidata: dict) -> bool:
+    if not multidata:
+        return False
+    if "names" not in multidata:
+        return False
+    if "locations" not in multidata:
+        return False
+    if "roms" not in multidata:
+        return False
+    return True
+
+
+
 @app.post("/multidata")
 def create_multi_session(
     file: Annotated[bytes, File()],
@@ -577,6 +590,9 @@ def create_multi_session(
         # return {"error": "Game does not exist, please create it first"}
 
     parsed_data = json.loads(zlib.decompress(multidata).decode("utf-8"))
+
+    if not is_multidata_valid(parsed_data):
+        raise HTTPException(status_code=400, detail="Invalid multidata")
 
     flags = json.loads(flags)
 

@@ -351,6 +351,10 @@ export const sniApiSlice = createApi({
           return { error: `Error getting ROM info: ${e}` }
         }
 
+        if (!fileName && connectedDevice.includes("luabridge")) {
+          fileName = "luabridge_undetectable"
+        }
+
         if (!fileName) {
           return { error: "Error getting ROM info" }
         }
