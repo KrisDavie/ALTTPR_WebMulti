@@ -355,6 +355,10 @@ export const sniApiSlice = createApi({
           fileName = "luabridge_undetectable"
         }
 
+        if (!fileName && connectedDevice.includes("ra://")) {
+          fileName = "retroarch_undetectable"
+        }
+
         if (!fileName) {
           return { error: "Error getting ROM info" }
         }
