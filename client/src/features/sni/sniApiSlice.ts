@@ -35,9 +35,9 @@ import { UserState } from "../user/userSlice"
 
 export const ingame_modes = [
   0x07, // Dungeon
-  0x09, // Overworld 
+  0x09, // Overworld
   0x0b, // Special overworld
-  0x19 // Triforce room
+  0x19, // Triforce room
 ]
 const save_quit_modes = [0x00, 0x01, 0x17, 0x1b]
 
@@ -330,12 +330,19 @@ export const sniApiSlice = createApi({
         let fileName
 
         try {
-          fileName = (
-            await controlDev.fetchFields({
-              uri: connectedDevice,
-              fields: [Field.RomFileName],
-            })
-          ).response.values[0]
+          if (
+            connectedDevice.includes("luabridge") ||
+            connectedDevice.includes("ra://")
+          ) {
+            fileName = "lua_or_ra_undetectable"
+          } else {
+            fileName = (
+              await controlDev.fetchFields({
+                uri: connectedDevice,
+                fields: [Field.RomFileName],
+              })
+            ).response.values[0]
+          }
         } catch (e) {
           if (
             connectionState === "connected" &&
@@ -349,14 +356,6 @@ export const sniApiSlice = createApi({
             setNonPlayerInfo(queryApi, user)
           }
           return { error: `Error getting ROM info: ${e}` }
-        }
-
-        if (!fileName && connectedDevice.includes("luabridge")) {
-          fileName = "luabridge_undetectable"
-        }
-
-        if (!fileName && connectedDevice.includes("ra://")) {
-          fileName = "retroarch_undetectable"
         }
 
         if (!fileName) {
@@ -374,7 +373,6 @@ export const sniApiSlice = createApi({
         }
 
         queryApi.dispatch(setFileName(fileName))
-
 
         // ============= Finshed receiving =============
         // Safety check to make sure we're done receiving at the cost of some latency
@@ -462,13 +460,13 @@ export const sniApiSlice = createApi({
             rom_name: romName,
             player_id: parseInt(player_id),
             player_name: "Player " + player_id,
-            user_id: user && user.id ? user.id : 0,	
+            user_id: user && user.id ? user.id : 0,
             session_token: user && user.token ? user.token : "",
           }
 
           // Covers 5.
           queryApi.dispatch(setPlayerInfo(player_info))
-          queryApi.dispatch(setPlayerType('player'))
+          queryApi.dispatch(setPlayerType("player"))
         }
         if (!ingame_modes.includes(sram["game_mode"][0])) {
           if (save_quit_modes.includes(sram["game_mode"][0])) {
