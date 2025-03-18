@@ -581,7 +581,7 @@ def create_multi_session(
     db_game = crud.get_game(db, game)
     user, _ = user_info
 
-    if not user:
+    if not user or (not user.discord_id and not user.bot):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     if not db_game:

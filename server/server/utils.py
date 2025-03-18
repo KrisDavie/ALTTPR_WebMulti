@@ -104,7 +104,9 @@ def user_allowed_in_session(session: models.MWSession, user: models.User):
         return False
     if user.is_superuser:
         return True
-    all_allowed_users = session.allowed_users + [x.discord_id for x in session.owners]
+    all_allowed_users = session.allowed_users + [x.discord_id for x in session.owners if x.discord_id]
+    if None in all_allowed_users:
+        all_allowed_users.remove(None)
     return user.discord_id in all_allowed_users
 
 

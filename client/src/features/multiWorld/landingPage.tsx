@@ -13,7 +13,7 @@ function LandingPage() {
   const [tooltipOpen, setTooltipOpen] = useState(false)
 
   function handleTooltipOpenChange(open: boolean) {
-    if (user.id === 0) {
+    if (!user.discordUsername) {
       setTooltipOpen(open)
     } else {
       setTooltipOpen(false)
@@ -34,14 +34,14 @@ function LandingPage() {
       {selectedMode === "" && (
         <div className="flex flex-row h-5 items-center justify-center space-x-4 text-sm">
           <TooltipProvider>
-            <Tooltip delayDuration={150} onOpenChange={handleTooltipOpenChange} open={tooltipOpen && user.id === 0}>
+            <Tooltip delayDuration={150} onOpenChange={handleTooltipOpenChange} open={tooltipOpen && !user.discordUsername}>
               <TooltipTrigger>
-                <Button onClick={() => setSelectedMode("server")} disabled={user.id === 0}>
+                <Button onClick={() => setSelectedMode("server")} disabled={!user.discordUsername}>
                   Start a Server
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                You must be logged in to start a server.
+                You must be logged in via Discord to start a server.
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

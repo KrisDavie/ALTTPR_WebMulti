@@ -4,7 +4,7 @@ import MultiEventText from "./MultiEventText"
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { sendChatMessage } from "./multiworldSlice"
+import { addEvent, sendChatMessage } from "./multiworldSlice"
 import {
   Popover,
   PopoverContent,
@@ -14,6 +14,7 @@ import { Settings2Icon } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Event } from "@/app/types"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { nanoid } from "@reduxjs/toolkit"
 
 interface MultiEventViewerProps {
   sessionId: string
@@ -21,7 +22,7 @@ interface MultiEventViewerProps {
 
 function MultiEventViewer(props: MultiEventViewerProps) {
   const { sessionId } = props
-  const { isLoading } = useGetSessionEventsQuery(sessionId)
+  const { isLoading, error: eventsError } = useGetSessionEventsQuery(sessionId)
   const { isLoading: playersLoading, data: players } =
     useGetPlayersQuery(sessionId)
   const multiworldEvents = useAppSelector(state => state.multiworld.events)
@@ -102,6 +103,40 @@ function MultiEventViewer(props: MultiEventViewerProps) {
       eventContainerRef.current.scrollTo(0, eventContainerRef.current.scrollHeight)
     }
   }, [multiworldEvents, hasScrolled])
+
+  useEffect(() => {
+    if (eventsError && "status" in eventsError && eventsError.status === 403) {
+      dispatch(
+        addEvent({
+          event_type: "chat",
+          from_player: -1,
+          to_player: -1,
+          timestamp: Date.now(),
+          event_data: {
+            message: `Your connection to the server was closed (Authorized users only).`,
+            type: "error",
+          },
+          id: nanoid(),
+        }),
+      )
+      dispatch(
+        addEvent({
+          event_type: "chat",
+          from_player: -1,
+          to_player: -1,
+          timestamp: Date.now(),
+          event_data: {
+            message: `Redirecting to home page...`,
+            type: "error",
+          },
+          id: nanoid(),
+        }),
+      )
+      setTimeout(() => {
+        window.location.href = "/"
+      }, 2000)
+    }
+  }, [eventsError, dispatch])
 
   const handleOnScroll = () => {
     if (!eventContainerRef.current) {
