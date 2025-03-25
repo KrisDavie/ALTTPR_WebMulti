@@ -280,7 +280,7 @@ export const sniApiSlice = createApi({
 
           // Add a small pause between items, this should hopefully reduce the chance of duplicate items
           // The default item get fanfare is ~1.6 seconds
-          await new Promise(r => setTimeout(r, 1000))
+          await new Promise(r => setTimeout(r, 1350))
 
           queryApi.dispatch(
             log(
@@ -290,7 +290,7 @@ export const sniApiSlice = createApi({
         }
 
         // Here we're just going to wait a little bit after sending the last item before then updating the state
-        await new Promise(r => setTimeout(r, 1000))
+        await new Promise(r => setTimeout(r, 1350))
         updateReceiving(queryApi.dispatch, false)
         queryApi.dispatch(log(`Completed sending items`))
         return { data: writeResponse?.response.response?.requestAddress }

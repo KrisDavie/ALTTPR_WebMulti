@@ -269,7 +269,7 @@ def get_user_by_email(db: Session, email: str):
 
 
 def get_user_by_discord_id(db: Session, discord_id: str):
-    return db.query(models.User).filter(models.User.discord_id == discord_id).first()
+    return db.query(models.User).filter(models.User.discord_id == discord_id).one_or_none()
 
 
 def add_owner_to_session(db: Session, session_id: str, user_id: int):

@@ -615,9 +615,11 @@ def create_multi_session(
         for x in admins.split(","):
             try:
                 admin_user = crud.get_user_by_discord_id(db, x)
+                if not admin_user:
+                    raise HTTPException(status_code=404, detail=f"User {x} not found!")
                 admin_users.append(admin_user)
             except:
-                return {"error": f"User {x} not found!"}
+                 raise HTTPException(status_code=404, detail=f"User {x} not found!")
 
     # Create a session for the game
     session = crud.create_session(
