@@ -36,8 +36,9 @@ function MultiView() {
 
   useEffect(() => {
     if (session && user) {
+      const isSuperuser = user.superUser ? true : false
       setAdminMode(
-        session.admins?.find(([_, id]) => id === user.id) !== undefined,
+        ((session.admins?.find(([_, id]) => id === user.id) !== undefined) || isSuperuser),
       )
     }
   }, [session, user])

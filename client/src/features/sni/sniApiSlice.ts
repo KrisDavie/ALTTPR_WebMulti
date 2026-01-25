@@ -103,7 +103,7 @@ const setNonPlayerInfo = (queryApi: BaseQueryApi, user: UserState) => {
 
 const isCompatibleSeed = (romName: string) => {
   return (
-    ["DR", "OR"].includes(romName.slice(0, 2)) &&
+    ["DR", "OR", "GK"].includes(romName.slice(0, 2)) &&
     romName.split("_").length === 4
   )
 }
