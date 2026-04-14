@@ -31,7 +31,7 @@ function UserButton() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    setUsername(user.username ?? "Guest#" + ("0000" + user.id).slice(-4))
+    setUsername(user.username ?? "Guest#" + String(user.id).padStart(6, "0"))
   }, [user])
 
 

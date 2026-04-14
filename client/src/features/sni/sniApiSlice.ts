@@ -8,6 +8,7 @@ import {
   resetGrpc,
   setConnectedDevice,
   setDeviceList,
+  setDeviceCapabilities,
   setGrpcConnected,
   shiftQueue,
   SniSliceState,
@@ -18,7 +19,7 @@ import {
   DeviceMemoryClient,
   DeviceInfoClient,
 } from "@/sni/sni.client"
-import { AddressSpace, MemoryMapping, Field } from "@/sni/sni"
+import { AddressSpace, DeviceCapability, MemoryMapping, Field } from "@/sni/sni"
 import {
   MultiworldSliceState,
   setPlayerInfo,
@@ -89,6 +90,26 @@ const getTransport = (state: AccessedState) => {
   })
 }
 
+const capabilityNames: Record<number, string> = {
+  [DeviceCapability.ReadMemory]: "Read Memory",
+  [DeviceCapability.WriteMemory]: "Write Memory",
+  [DeviceCapability.ResetSystem]: "Reset System",
+  [DeviceCapability.FetchFields]: "Fetch Fields",
+}
+
+const hasCapability = (state: AccessedState, capability: DeviceCapability): boolean => {
+  const uri = state.sni.connectedDevice
+  if (!uri) return false
+  const caps = state.sni.deviceCapabilities[uri]
+  if (!caps) return false
+  return caps.includes(capability)
+}
+
+const missingCapabilityError = (capability: DeviceCapability): string => {
+  const name = capabilityNames[capability] ?? DeviceCapability[capability] ?? `capability ${capability}`
+  return `Device does not support ${name}. This device cannot be used for this operation.`
+}
+
 const setNonPlayerInfo = (queryApi: BaseQueryApi, user: UserState) => {
   queryApi.dispatch(
     setPlayerInfo({
@@ -121,8 +142,13 @@ export const sniApiSlice = createApi({
           const devices = devicesReponse.response.devices.map(
             device => device.uri,
           )
+          const capMap: Record<string, DeviceCapability[]> = {}
+          for (const device of devicesReponse.response.devices) {
+            capMap[device.uri] = device.capabilities
+          }
           queryApi.dispatch(setGrpcConnected(true))
           queryApi.dispatch(setDeviceList(devices))
+          queryApi.dispatch(setDeviceCapabilities(capMap))
           if (devices.length > 0 && !arg.noConnect) {
             queryApi.dispatch(setConnectedDevice(devices[0]))
           }
@@ -137,14 +163,17 @@ export const sniApiSlice = createApi({
       async queryFn(arg, queryApi) {
         const state = queryApi.getState() as AccessedState
         const transport = getTransport(state)
-        const controlClient = new DeviceControlClient(transport)
         const connectedDevice = state.sni.connectedDevice
-        if (connectedDevice) {
-          const res = await controlClient.resetSystem({ uri: connectedDevice })
-          return { data: res }
-        } else {
+        if (!connectedDevice) {
           return { error: "No device selected" }
         }
+        if (!hasCapability(state, DeviceCapability.ResetSystem)) {
+          queryApi.dispatch(log(missingCapabilityError(DeviceCapability.ResetSystem)))
+          return { error: missingCapabilityError(DeviceCapability.ResetSystem) }
+        }
+        const controlClient = new DeviceControlClient(transport)
+        const res = await controlClient.resetSystem({ uri: connectedDevice })
+        return { data: res }
       },
     }),
 
@@ -169,6 +198,16 @@ export const sniApiSlice = createApi({
         if (!connectedDevice) {
           updateReceiving(queryApi.dispatch, false)
           return { error: "No device or memory data" }
+        }
+        if (!hasCapability(state, DeviceCapability.ReadMemory)) {
+          updateReceiving(queryApi.dispatch, false)
+          queryApi.dispatch(log(missingCapabilityError(DeviceCapability.ReadMemory)))
+          return { error: missingCapabilityError(DeviceCapability.ReadMemory) }
+        }
+        if (!hasCapability(state, DeviceCapability.WriteMemory)) {
+          updateReceiving(queryApi.dispatch, false)
+          queryApi.dispatch(log(missingCapabilityError(DeviceCapability.WriteMemory)))
+          return { error: missingCapabilityError(DeviceCapability.WriteMemory) }
         }
 
         // We wait until receiving is set before actually sending items
@@ -324,6 +363,11 @@ export const sniApiSlice = createApi({
           return { error: "No device selected" }
         }
 
+        if (!hasCapability(state, DeviceCapability.ReadMemory)) {
+          queryApi.dispatch(log(missingCapabilityError(DeviceCapability.ReadMemory)))
+          return { error: missingCapabilityError(DeviceCapability.ReadMemory) }
+        }
+
         // ================== ROM Checks (Loaded File) ==================
         // This is needed because an FxPak doesn't clear memory assocaited with the ROM name in memory when switching between ROMs
         // We can't _just_ rely on this because 2 different ROMs could share the same file name (i.e. when using MSUs)
@@ -332,7 +376,8 @@ export const sniApiSlice = createApi({
         try {
           if (
             connectedDevice.includes("luabridge") ||
-            connectedDevice.includes("ra://")
+            connectedDevice.includes("ra://") ||
+            !hasCapability(state, DeviceCapability.FetchFields)
           ) {
             fileName = "lua_or_ra_undetectable"
           } else {

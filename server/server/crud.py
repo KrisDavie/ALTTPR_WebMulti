@@ -7,8 +7,6 @@ from sqlalchemy import func, or_
 
 from . import models, schemas
 
-ignore_mask = {}
-
 logger = logging.getLogger(__name__)
 
 
@@ -238,6 +236,8 @@ def delete_user(db: Session, user_id: int):
     db_user.username_as_player_name = False
     db_user.supporter = False
     db_user.colour = None
+    db.commit()
+    db.refresh(db_user)
     return True
 
 
@@ -565,7 +565,7 @@ def create_event(db: Session, event: schemas.EventCreate):
                 .filter(models.Event.to_player == event.to_player)
                 .filter(models.Event.from_player != event.to_player)
                 .filter(models.Event.event_type == models.EventTypes.new_item)
-                .order_by(models.Event.timestamp.desc())
+                .order_by(models.Event.to_player_idx.desc())
                 .first()
             )
             if last_item:
@@ -588,57 +588,44 @@ def create_event(db: Session, event: schemas.EventCreate):
 def create_forfeit_events(
     db: Session, session_id: str, events: list[schemas.EventCreate]
 ):
-    # Get the last event for each player from the db
-    # session = get_session(db, session_id)
-    # players = [x + 1 for x, _ in enumerate(session.mwdata["names"][0])]
-    # last_events = db.query(models.Event).filter(models.Event.session_id == session_id).order_by(models.Event.to_player).order_by(models.Event.to_player_idx.asc()).distinct(models.Event.to_player).all()
-    # last_event_map = {event.to_player: event.to_player_idx for event in last_events}
-    # for player in players:
-    #     if player not in last_event_map:
-    #         last_event_map[player] = 0
-    #     else:
-    #         if type(last_event_map[player]) != int:
-    #             last_event_map[player] = 0
-    # Create the forfeit events
+    # Get the max to_player_idx for each target player in one query
+    from sqlalchemy import func
+
+    target_players = set(
+        e.to_player for e in events if e.to_player != e.from_player
+    )
+    if target_players:
+        max_idx_rows = (
+            db.query(models.Event.to_player, func.max(models.Event.to_player_idx))
+            .filter(models.Event.session_id == session_id)
+            .filter(models.Event.to_player.in_(target_players))
+            .filter(models.Event.to_player_idx != None)
+            .group_by(models.Event.to_player)
+            .all()
+        )
+        next_idx_map = {row[0]: (row[1] or 0) + 1 for row in max_idx_rows}
+    else:
+        next_idx_map = {}
+
+    # Pre-assign to_player_idx for all events
+    db_events = []
     for event in events:
         if event.to_player != event.from_player:
-            # event.to_player_idx = last_event_map[event.to_player]
-            # last_event_map[event.to_player] += 1
+            idx = next_idx_map.get(event.to_player, 1)
+            event.to_player_idx = idx
+            next_idx_map[event.to_player] = idx + 1
+        db_events.append(models.Event(**event.model_dump()))
 
-            # This will hit the db for each event, but it should be fine since we're only doing this for forfeit events
-            last_event = (
-                db.query(models.Event)
-                .filter(models.Event.session_id == session_id)
-                .filter(models.Event.to_player == event.to_player)
-                .filter(models.Event.to_player_idx != None)
-                .order_by(models.Event.to_player_idx.desc())
-                .first()
-            )
-            if last_event:
-                event.to_player_idx = last_event.to_player_idx + 1
-            else:
-                event.to_player_idx = 1
-        ff_event = models.Event(**event.model_dump())
+    # Batch insert with single commit
+    try:
+        db.add_all(db_events)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Error creating forfeit events batch: {e}")
+        db.rollback()
+        return False
 
-        # TODO: This could probably be dealt with better, but should be good for now.
-        while True:
-            try:
-                db.add(ff_event)
-                db.commit()
-                db.refresh(ff_event)
-                break
-            except Exception as e:
-                logger.error(f"Error creating event: {e}")
-                db.rollback()
-                ff_event.to_player_idx += 1
-
-    # try:
-    #     db.commit()
-    #     return True
-    # except Exception as e:
-    #     logger.error(f"Error creating forfeit events: {e}")
-    #     db.rollback()
-    #     return False
+    return True
 
 
 def create_sramstore(db: Session, sramstore: schemas.SRAMStoreCreate):

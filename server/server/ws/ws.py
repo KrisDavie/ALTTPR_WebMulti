@@ -77,11 +77,11 @@ async def websocket_endpoint(
             player_info = await websocket.receive_json()
             if player_info["type"] == "player_info":
                 user_type = "player"
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
                 break
             elif player_info["type"] == "user_info":
                 user_type = "non_player"
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
                 break
         except WebSocketDisconnect:
             return
@@ -106,15 +106,10 @@ async def websocket_endpoint(
         )
         user_type = "non_player"
 
-    user, token = main.verify_session_token(
-        None,
-        None,
+    user, token = main.verify_session_token_ws(
         db,
-        auth_only=True,
-        from_ws={
-            "user_id": player_info["user_id"],
-            "session_token": player_info["session_token"],
-        },
+        user_id=str(player_info["user_id"]),
+        session_token=player_info["session_token"],
     )
 
     allowed = user_allowed_in_session(session, user)
@@ -195,7 +190,6 @@ async def websocket_endpoint(
         await websocket.send_json({"type": "init_success"})
 
     # This listens for new events and sends them to the client, it's never actually called itself
-    @listen_event.listens_for(models.Event, "after_insert")
     def after_event(mapper, connection, target_event):
         nonlocal should_close
         nonlocal events_to_send
@@ -205,7 +199,7 @@ async def websocket_endpoint(
         if target_event.session_id != session.id:
             return
         elif target_event.event_type == models.EventTypes.player_forfeit:
-            # I don't remember why I did this, but it's probably important
+            # On Forfeit we want to skip the next few updates because the forfeit is slow
             skip_update = 3
             return
         elif websocket.client_state != WebSocketState.CONNECTED:
@@ -259,6 +253,9 @@ async def websocket_endpoint(
     for p_event in crud.get_events_from_player(db, session.id, player_id):
         if p_event.event_type == models.EventTypes.new_item:
             checked_locations[p_event.location] = p_event.frame_time
+
+    # Register the listener after defining it
+    listen_event.listen(models.Event, "after_insert", after_event)
 
     try:
         while True:
@@ -571,7 +568,7 @@ async def websocket_endpoint(
                             event_data={"player_id": player_to_kick},
                         ),
                     )
-                    await time.sleep(2.0)
+                    await asyncio.sleep(2.0)
                     conn_events = crud.get_player_connection_events(db, session.id, player_to_kick)
                     if (
                         len(conn_events) > 0
@@ -744,3 +741,7 @@ async def websocket_endpoint(
                     event_data={"player_id": player_id, "player_name": player_name},
                 ),
             )
+    finally:
+        # Always remove the listener to prevent leak
+        if listen_event.contains(models.Event, "after_insert", after_event):
+            listen_event.remove(models.Event, "after_insert", after_event)

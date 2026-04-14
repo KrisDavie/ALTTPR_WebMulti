@@ -62,7 +62,7 @@ def get_changed_locations(sram_diff: dict, old_sram: dict, new_sram: dict) -> li
                         for name, mask in loc_data.location_info_by_ow_screen[
                             "bonk_prizes"
                         ][mem_loc]:
-                            if ((ow_data & mask) != old_ow_data & mask) and (
+                            if ((ow_data & mask) != (old_ow_data & mask)) and (
                                 ow_data & mask
                             ) != 0:
                                 locations.append(name)
@@ -73,7 +73,7 @@ def get_changed_locations(sram_diff: dict, old_sram: dict, new_sram: dict) -> li
                 npc_data = new_sram[loc_group][0] | (new_sram[loc_group][1] << 8)
                 old_npc_data = old_sram[loc_group][0] | (old_sram[loc_group][1] << 8)
                 for name, mask in loc_data.location_info[loc_group].items():
-                    if ((npc_data & mask) != old_npc_data & mask) and (
+                    if ((npc_data & mask) != (old_npc_data & mask)) and (
                         npc_data & mask
                     ) != 0:
                         locations.append(name)

@@ -130,35 +130,31 @@ def user_logout(response: Response, unauthorized: bool = False):
     return response
 
 
-def verify_session_token(
+def _verify_token(
     response: Response,
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
-    auth_only: bool = False,
-    from_ws: dict = {},
+    db: Session,
+    token: str | None = None,
+    user_id: str | None = None,
 ) -> tuple[models.User, str]:
-    # TODO: Confirm we don't have auth headers in other use cases
+    """Core token verification logic, used by both HTTP and WS paths."""
     if request and "Authorization" in request.headers:
-        auth_type, token = request.headers["Authorization"].split(" ")
+        auth_type, auth_token = request.headers["Authorization"].split(" ")
         if auth_type.lower() != "bearer":
             return False, False
 
-        user = crud.get_user_by_api_key(db, token)
+        user = crud.get_user_by_api_key(db, auth_token)
         if not user:
             return False, False
-        updated_token = crud.update_api_key_used(db, token)
+        updated_token = crud.update_api_key_used(db, auth_token)
         return user, updated_token
 
-    if from_ws == {}:
+    if token is None and request:
         token = request.cookies.get("session_token")
+    if user_id is None and request:
         user_id = request.cookies.get("user_id")
-    else:
-        token = from_ws.get("session_token")
-        user_id = from_ws.get("user_id")
 
     if not user_id:
-        if not auth_only:
-            return create_guest_user(response, db)
         return False, False
     if not token:
         return False, False
@@ -184,6 +180,23 @@ def verify_session_token(
     ):
         return update_session_token(response, db, user.id, token)
     return user, token
+
+
+def verify_session_token(
+    response: Response,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> tuple[models.User, str]:
+    return _verify_token(response, request, db)
+
+
+def verify_session_token_ws(
+    db: Session,
+    user_id: str | None,
+    session_token: str | None,
+) -> tuple[models.User, str]:
+    """Verify a session token from WebSocket player_info (not a FastAPI dependency)."""
+    return _verify_token(None, None, db, token=session_token, user_id=user_id)
 
 
 def update_session_token(
@@ -334,11 +347,13 @@ def auth_user(
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):
     user, token = user_info
+    if not user and not auth_only:
+        user, token = create_guest_user(response, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     if user.discord_id and not user.discord_display_name:
         user.discord_display_name = user.username
         user = crud.update_user(db, user.id, user)
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
     user.token = token
     return user
 
@@ -472,14 +487,16 @@ def get_session_info(
     db: Annotated[Session, Depends(get_db)], session: schemas.MWSession, user_id: int
 ):
     player_datas = get_session_players_info_from_db(db, session)
-    last_updated = crud.get_last_event(db, session.id).timestamp.timestamp()
-    if not last_updated:
+    last_event = crud.get_last_event(db, session.id)
+    if last_event:
+        last_updated = last_event.timestamp.timestamp()
+    else:
         last_updated = session.created_at.timestamp()
         
     TIME_TO_IDLE = datetime.timedelta(days=2)
 
     tot_complete = all([x.goalCompleted for x in player_datas])
-    if tot_complete == len(player_datas):
+    if tot_complete:
         status = "completed"
     elif last_updated <= (datetime.datetime.now() - TIME_TO_IDLE).timestamp():
         status = "inactive"
@@ -487,7 +504,7 @@ def get_session_info(
         status = "active"
 
     owners_info = [
-        (x.username if x.username else f"Guest#{x.id:04}", x.id) for x in session.owners
+        (x.username if x.username else f"Guest#{x.id:06}", x.id) for x in session.owners
     ]
 
     featureFlags = {}
@@ -637,7 +654,7 @@ def create_multi_session(
         admin_users #Specified as a list of users, added after the owner
     )
 
-    create_event = crud.create_event(
+    session_create_event = crud.create_event(
         db,
         schemas.EventCreate(
             session_id=session.id,
@@ -727,7 +744,7 @@ def get_session_players_info(
 @app.post("/session/{mw_session_id}/adminSend")
 def admin_send_event(
     mw_session_id: str,
-    send_data: Annotated[dict, Body()],
+    send_data: dict,
     db: Annotated[Session, Depends(get_db)],
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
 ):

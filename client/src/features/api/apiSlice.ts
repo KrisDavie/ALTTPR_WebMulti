@@ -169,12 +169,10 @@ export const apiSlice = createApi({
         url: `/session/${sessionId}/adminSend`,
         method: "POST",
         body: {
-          send_data: {
-            event_type: players.length > 1 ? "send_multi" : "send_single",
-            to_players: players.length > 1 ? players : players[0],
-            item_id: itemId,
-            password: password,
-          }
+          event_type: players.length > 1 ? "send_multi" : "send_single",
+          to_players: players.length > 1 ? players : players[0],
+          item_id: itemId,
+          password: password,
         },
       }),
     }),

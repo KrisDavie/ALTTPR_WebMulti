@@ -9,7 +9,7 @@ import {
   setGrpcPort,
 } from "./sniSlice"
 
-import { useLazyGetDevicesQuery } from "./sniApiSlice"
+import { useLazyGetDevicesQuery, useResetMutation } from "./sniApiSlice"
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -32,11 +32,15 @@ import {
 } from "@/components/ui/select"
 
 import { useAppDispatch } from "@/app/hooks"
+import { DeviceCapability } from "@/sni/sni"
 
 function SniSettings() {
   const dispatch = useAppDispatch()
   const devices: string[] = useAppSelector(selectAvailableDevices)
+  const connectedDevice = useAppSelector(state => state.sni.connectedDevice)
+  const deviceCapabilities = useAppSelector(state => state.sni.deviceCapabilities)
   const [triggerGetDevicesQuery] = useLazyGetDevicesQuery()
+  const [triggerReset] = useResetMutation()
 
   const GPRCFormSchema = z.object({
     hostname: z.union([
@@ -81,8 +85,11 @@ function SniSettings() {
   }
 
   const handleReset = () => {
-    dispatch(reset())
+    triggerReset({})
   }
+
+  const connectedCaps = connectedDevice ? (deviceCapabilities[connectedDevice] ?? []) : []
+  const hasResetCapability = connectedCaps.includes(DeviceCapability.ResetSystem)
 
   useEffect(() => {
     if (devices.length > 0) {
@@ -93,7 +100,8 @@ function SniSettings() {
   return (
     <div className="flex flex-col w-auto">
       <div className="flex flex-row">
-        <Button className="mx-1" onClick={handleReset}>
+        <Button className="mx-1" onClick={handleReset} disabled={!hasResetCapability}
+          title={hasResetCapability ? "Reset the connected console" : "This device does not support Reset System"}>
           Reset Console
         </Button>
       </div>
@@ -187,6 +195,14 @@ function SniSettings() {
           </form>
         </Form>
       </div>
+      {connectedDevice && connectedCaps.length > 0 && (
+        <div className="flex flex-col py-3">
+          <span className="text-sm font-medium">Device Capabilities:</span>
+          <span className="text-xs text-muted-foreground">
+            {connectedCaps.map(c => DeviceCapability[c]).filter(Boolean).join(", ")}
+          </span>
+        </div>
+      )}
     </div>
   )
 }

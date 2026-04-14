@@ -1,12 +1,21 @@
 import { Event, ItemEvent } from "@/app/types"
 import type { PayloadAction } from "@reduxjs/toolkit"
 import { createSlice } from "@reduxjs/toolkit"
+import { DeviceCapability } from "@/sni/sni"
+
+export interface DeviceInfo {
+  uri: string
+  displayName: string
+  kind: string
+  capabilities: DeviceCapability[]
+}
 
 export interface SniSliceState {
   grpcHost: string
   grpcPort: number
   grpcConnected: boolean
   deviceList: string[]
+  deviceCapabilities: Record<string, DeviceCapability[]>
   connectedDevice?: string
   itemQueue: ItemEvent[]
 }
@@ -16,6 +25,7 @@ const initialState: SniSliceState = {
   grpcPort: 8190,
   grpcConnected: false,
   deviceList: [],
+  deviceCapabilities: {},
   connectedDevice: undefined,
   itemQueue: [],
 }
@@ -46,6 +56,7 @@ export const sniSlice = createSlice({
     resetGrpc: (state) => {
       state.grpcConnected = false
       state.deviceList = []
+      state.deviceCapabilities = {}
       state.connectedDevice = undefined
     },
     shiftQueue: (state) => {
@@ -57,6 +68,9 @@ export const sniSlice = createSlice({
     setDeviceList: (state, action: PayloadAction<string[]>) => {
       state.deviceList = action.payload
     },
+    setDeviceCapabilities: (state, action: PayloadAction<Record<string, DeviceCapability[]>>) => {
+      state.deviceCapabilities = action.payload
+    },
     setConnectedDevice: (state, action: PayloadAction<string>) => {
       state.connectedDevice = action.payload
     },
@@ -66,11 +80,15 @@ export const sniSlice = createSlice({
 export const selectAvailableDevices = (state: { sni: SniSliceState }) =>
   state.sni.deviceList
 
+export const selectDeviceCapabilities = (state: { sni: SniSliceState }, uri?: string) =>
+  uri ? (state.sni.deviceCapabilities[uri] ?? []) : []
+
 export const {
   setGrpcHost,
   setGrpcPort,
   setGrpcConnected,
   setDeviceList,
+  setDeviceCapabilities,
   resetGrpc,
   setConnectedDevice,
   addItemsToQueue,

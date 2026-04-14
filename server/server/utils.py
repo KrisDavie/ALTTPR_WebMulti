@@ -87,7 +87,7 @@ def sanitize_chat_message(message: str):
             final_message = command[0]
             if len(command) > 1:
                 try:
-                    final_message = " ".join(command[0], int(command[1]))
+                    final_message = f"{command[0]} {int(command[1])}"
                 except:
                     pass
         else:
