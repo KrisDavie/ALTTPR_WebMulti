@@ -6,7 +6,9 @@ import os
 import secrets
 import time
 import zlib
+from urllib.parse import urlparse
 
+import httpx
 from alembic.config import Config
 from alembic import command
 from authlib.integrations.starlette_client import OAuth
@@ -574,29 +576,19 @@ def is_multidata_valid(multidata: dict) -> bool:
 
 
 
-@app.post("/multidata")
-def create_multi_session(
-    file: Annotated[bytes, File()],
-    db: Annotated[Session, Depends(get_db)],
-    file_size: Annotated[int, Depends(valid_content_length)],
-    game: Annotated[str, Form()] = "z3",
-    tournament: Annotated[bool, Form()] = False,
-    flags: Annotated[str, Form()] = "{}",
-    admins: Annotated[str, Form()] = "",
-    allowed_users: Annotated[str, Form()] = "",
-    password: Annotated[str, Form()] = "",
-    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
+def _process_multidata_bytes(
+    file_bytes: bytes,
+    db: Session,
+    user: models.User,
+    game: str = "z3",
+    tournament: bool = False,
+    flags_str: str = "{}",
+    admins: str = "",
+    allowed_users: str = "",
+    password: str = "",
 ):
-    # Accept form multi-data
-
-    if len(file) > file_size:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Too large"
-        )
-
-    multidata = file
+    """Shared logic for creating a session from raw multidata bytes."""
     db_game = crud.get_game(db, game)
-    user, _ = user_info
 
     if not user or (not user.discord_id and not user.bot):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -604,17 +596,25 @@ def create_multi_session(
     if not db_game:
         db_game = crud.create_game(db, schemas.GameCreate(title=game))
         logger.error(f"Game does not exist, creating it: {game}")
-        # return {"error": "Game does not exist, please create it first"}
 
-    parsed_data = json.loads(zlib.decompress(multidata).decode("utf-8"))
+    try:
+        decompressor = zlib.decompressobj()
+        decompressed = decompressor.decompress(file_bytes, MAX_MULTIDATA_SIZE + 1)
+        if decompressor.unconsumed_tail:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Decompressed multidata exceeds size limit",
+            )
+        parsed_data = json.loads(decompressed.decode("utf-8"))
+    except zlib.error:
+        raise HTTPException(status_code=400, detail="Invalid compressed data")
 
     if not is_multidata_valid(parsed_data):
         raise HTTPException(status_code=400, detail="Invalid multidata")
 
-    flags = json.loads(flags)
+    flags = json.loads(flags_str)
 
     if tournament:
-        # Allow overwriting flags, but make default strict
         if "forfeit" not in flags:
             flags["forfeit"] = False
         if "missingCmd" not in flags:
@@ -636,9 +636,8 @@ def create_multi_session(
                     raise HTTPException(status_code=404, detail=f"User {x} not found!")
                 admin_users.append(admin_user)
             except:
-                 raise HTTPException(status_code=404, detail=f"User {x} not found!")
+                raise HTTPException(status_code=404, detail=f"User {x} not found!")
 
-    # Create a session for the game
     session = crud.create_session(
         db,
         schemas.MWSessionCreate(
@@ -651,10 +650,10 @@ def create_multi_session(
             allowed_users=allowed_users.split(",") if allowed_users else None,
         ),
         user.id,
-        admin_users #Specified as a list of users, added after the owner
+        admin_users,
     )
 
-    session_create_event = crud.create_event(
+    crud.create_event(
         db,
         schemas.EventCreate(
             session_id=session.id,
@@ -673,6 +672,79 @@ def create_multi_session(
     else:
         logger.error(f"Failed to create session")
         return {"error": "Failed to create session"}
+
+
+MAX_MULTIDATA_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@app.post("/multidata")
+def create_multi_session(
+    file: Annotated[bytes, File()],
+    db: Annotated[Session, Depends(get_db)],
+    file_size: Annotated[int, Depends(valid_content_length)],
+    game: Annotated[str, Form()] = "z3",
+    tournament: Annotated[bool, Form()] = False,
+    flags: Annotated[str, Form()] = "{}",
+    admins: Annotated[str, Form()] = "",
+    allowed_users: Annotated[str, Form()] = "",
+    password: Annotated[str, Form()] = "",
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
+):
+    if len(file) > file_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Too large"
+        )
+
+    user, _ = user_info
+    return _process_multidata_bytes(
+        file, db, user, game, tournament, flags, admins, allowed_users, password
+    )
+
+
+@app.post("/multidata_url")
+def create_multi_session_from_url(
+    url: Annotated[str, Body()],
+    db: Annotated[Session, Depends(get_db)],
+    game: Annotated[str, Body()] = "z3",
+    tournament: Annotated[bool, Body()] = False,
+    flags: Annotated[str, Body()] = "{}",
+    admins: Annotated[str, Body()] = "",
+    allowed_users: Annotated[str, Body()] = "",
+    password: Annotated[str, Body()] = "",
+    user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)] = None,
+):
+    parsed_url = urlparse(url)
+    if parsed_url.scheme != "https":
+        raise HTTPException(status_code=400, detail="Only HTTPS URLs are allowed")
+
+    if not parsed_url.hostname:
+        raise HTTPException(status_code=400, detail="Invalid URL")
+
+    user, _ = user_info
+
+    try:
+        with httpx.Client(timeout=30, max_redirects=5) as client:
+            response = client.get(url)
+            response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to fetch multidata: remote server returned {e.response.status_code}",
+        )
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=400, detail="Failed to fetch multidata from URL"
+        )
+
+    if len(response.content) > MAX_MULTIDATA_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Remote file too large",
+        )
+
+    return _process_multidata_bytes(
+        response.content, db, user, game, tournament, flags, admins, allowed_users, password
+    )
 
 
 @app.get("/session/{mw_session_id}/events")

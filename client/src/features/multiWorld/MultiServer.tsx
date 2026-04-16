@@ -13,16 +13,18 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import * as z from "zod"
-import { useUploadMultiDataMutation } from "../api/apiSlice"
+import { useUploadMultiDataMutation, useUploadMultiDataFromUrlMutation } from "../api/apiSlice"
 
 import { useNavigate } from "react-router-dom"
+import { useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleTrigger } from "@radix-ui/react-collapsible"
 import { CollapsibleContent } from "@/components/ui/collapsible"
-import { ChevronsUpDown } from "lucide-react"
+import { ChevronsUpDown, Link } from "lucide-react"
 
-interface MultiClientFormProps {
+interface MultiServerProps {
   setSelectedMode: (mode: string) => void
+  multidataUrl?: string
 }
 
 const allFlags = [
@@ -33,16 +35,26 @@ const allFlags = [
   { id: "forfeit", label: "Forfeit" },
 ]
 
-function MultiServer(props: MultiClientFormProps) {
-  const { setSelectedMode } = props
+function MultiServer(props: MultiServerProps) {
+  const { setSelectedMode, multidataUrl } = props
   const navigate = useNavigate()
   const [uploadMultiData] = useUploadMultiDataMutation()
-  // Form with a file upload and a select for the game
+  const [uploadMultiDataFromUrl] = useUploadMultiDataFromUrlMutation()
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
   const FormSchema = z.object({
-    file: z.any(),
+    file: z.any().optional(),
     password: z.string().optional(),
     tournament: z.boolean(),
     flags: z.array(z.string()).refine(value => value.some(item => item)),
+  }).superRefine((data, ctx) => {
+    if (!multidataUrl && (!data.file || data.file.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A multidata file is required",
+        path: ["file"],
+      })
+    }
   })
 
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -55,16 +67,34 @@ function MultiServer(props: MultiClientFormProps) {
   })
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
+    setSubmitError(null)
     const flags = allFlags.reduce((acc, flag) => {
       acc[flag.id] = data.flags.includes(flag.id)
       return acc
     }, {} as Record<string, boolean>)
-    const res = await uploadMultiData({
-      data: data.file[0],
-      password: data.password,
-      tournament: data.tournament,
-      flags: flags,
-    })
+
+    let res
+    if (multidataUrl) {
+      res = await uploadMultiDataFromUrl({
+        url: multidataUrl,
+        password: data.password,
+        tournament: data.tournament,
+        flags: flags,
+      })
+    } else {
+      res = await uploadMultiData({
+        data: data.file[0],
+        password: data.password,
+        tournament: data.tournament,
+        flags: flags,
+      })
+    }
+
+    if ("error" in res) {
+      const err = res.error as { data?: { detail?: string } }
+      setSubmitError(err.data?.detail ?? "Failed to create session")
+      return
+    }
 
     navigate(`/multi/${res.data.mw_session}`)
   }
@@ -86,24 +116,34 @@ function MultiServer(props: MultiClientFormProps) {
           onSubmit={form.handleSubmit(onSubmit)}
           className="w-auto space-x-1 py-3 flex flex-col items-left"
         >
-          <FormField
-            control={form.control}
-            name="file"
-            render={({ field: { onChange }, ...field }) => (
-              <FormItem>
-                <FormLabel htmlFor="file">Multiworld Data</FormLabel>
-                <FormControl>
-                  <Input
-                    className="w-80"
-                    type="file"
-                    {...field}
-                    onChange={event => onChange(event.target.files)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {multidataUrl ? (
+            <FormItem>
+              <FormLabel>Multiworld Data</FormLabel>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground w-80 p-2 rounded-md border bg-muted">
+                <Link className="h-4 w-4 shrink-0" />
+                <span className="truncate" title={multidataUrl}>{multidataUrl}</span>
+              </div>
+            </FormItem>
+          ) : (
+            <FormField
+              control={form.control}
+              name="file"
+              render={({ field: { onChange }, ...field }) => (
+                <FormItem>
+                  <FormLabel htmlFor="file">Multiworld Data</FormLabel>
+                  <FormControl>
+                    <Input
+                      className="w-80"
+                      type="file"
+                      {...field}
+                      onChange={event => onChange(event.target.files)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
           <br />
           <FormField
             control={form.control}
@@ -190,6 +230,9 @@ function MultiServer(props: MultiClientFormProps) {
             )}
           />
           <br />
+          {submitError && (
+            <p className="text-sm text-destructive mb-2">{submitError}</p>
+          )}
           <Button type="submit" className="w-80">
             Start Server
           </Button>

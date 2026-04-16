@@ -1,7 +1,7 @@
 import { useAppDispatch, useAppSelector } from "@/app/hooks"
 import { useGetSessionEventsQuery, useGetPlayersQuery } from "../api/apiSlice"
 import MultiEventText from "./MultiEventText"
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react"
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { addEvent, sendChatMessage } from "./multiworldSlice"
@@ -37,6 +37,16 @@ function MultiEventViewer(props: MultiEventViewerProps) {
   const [showOtherItems, setShowOtherItems] = useState(true)
   const [showChat, setShowChat] = useState(true)
   const [showSystem, setShowSystem] = useState(true)
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [popupDismissed, setPopupDismissed] = useState(false)
+  const flags = useAppSelector(state => state.multiworld.flags)
+
+  const allCommands = useMemo(() => [
+    { name: "/countdown", description: "Start a countdown timer", params: "[seconds]", example: "/countdown 5" },
+    { name: "/missing", description: "Show unchecked locations", params: "", example: "/missing", disabled: !flags.missingCmd },
+  ], [flags.missingCmd])
+
+
 
   function getFilteredEvents() {
     const sorted_events = multiworldEvents
@@ -97,10 +107,12 @@ function MultiEventViewer(props: MultiEventViewerProps) {
   }, [])
 
   const eventContainerRef = useRef<HTMLDivElement>(null!)
+  const chatInputRef = useRef<HTMLInputElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (eventContainerRef.current && !hasScrolled) {
-      eventContainerRef.current.scrollTo(0, eventContainerRef.current.scrollHeight)
+    if (!hasScrolled) {
+      bottomRef.current?.scrollIntoView({ block: "end" })
     }
   }, [multiworldEvents, hasScrolled])
 
@@ -142,18 +154,14 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     if (!eventContainerRef.current) {
       return
     }
-    if (eventContainerRef.current.clientHeight + eventContainerRef.current.scrollTop >= eventContainerRef.current.scrollHeight) {
-      setHasScrolled(false)
-      return
-    }
-    setHasScrolled(true)
+    const { clientHeight, scrollTop, scrollHeight } = eventContainerRef.current
+    const atBottom = scrollHeight - clientHeight - scrollTop < 2
+    setHasScrolled(!atBottom)
   }
 
   const handleScrollToBottom = () => {
-    if (eventContainerRef.current) {
-      eventContainerRef.current.scrollTo(0, eventContainerRef.current.scrollHeight)
-      setHasScrolled(false)
-    }
+    bottomRef.current?.scrollIntoView({ block: "end" })
+    setHasScrolled(false)
   }
 
   function handleChatSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -163,6 +171,30 @@ function MultiEventViewer(props: MultiEventViewerProps) {
     }
     dispatch(sendChatMessage({ message: chatMessage, user_id: user.id }))
     setChatMessage("")
+    setSelectedCommandIndex(0)
+  }
+
+  function selectCommand(command: typeof allCommands[number]) {
+    const hasParams = command.params.length > 0
+    // Currently always add a space so the helper message shows, but we could be smarter about this in the future
+    setChatMessage(command.name + (hasParams ? " " : " "))
+    setSelectedCommandIndex(0)
+    setPopupDismissed(true)
+    chatInputRef.current?.focus()
+  }
+
+  function handleChatKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!isSelectingCommand || filteredCommands.length === 0) return
+    if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setSelectedCommandIndex(i => (i - 1 + filteredCommands.length) % filteredCommands.length)
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setSelectedCommandIndex(i => (i + 1) % filteredCommands.length)
+    } else if (e.key === "Tab" || e.key === "Enter") {
+      e.preventDefault()
+      selectCommand(filteredCommands[selectedCommandIndex])
+    }
   }
 
   const allEventsFiltered = () => {
@@ -176,6 +208,20 @@ function MultiEventViewer(props: MultiEventViewerProps) {
   }
 
   const canSendMessages = (initComplete && currentPlayer && currentPlayer >= 0) || user.discordUsername
+
+  const commandPrefix = chatMessage.split(" ")[0].toLowerCase()
+  const isSelectingCommand = chatMessage.startsWith("/") && !chatMessage.includes(" ") && canSendMessages && !popupDismissed
+  const matchedCommand = chatMessage.includes(" ")
+    ? allCommands.find(cmd => cmd.name === commandPrefix && !cmd.disabled)
+    : null
+  const filteredCommands = isSelectingCommand
+    ? allCommands.filter(cmd => cmd.name.startsWith(commandPrefix) && !cmd.disabled)
+    : []
+  const showCommandPopup = (isSelectingCommand && filteredCommands.length > 0) || matchedCommand !== null
+
+  useEffect(() => {
+    setSelectedCommandIndex(0)
+  }, [commandPrefix])
 
   const renderEvents = useCallback((event: Event) => {
     const originalPlayerNames = players ? players.map((pnames: string[]) => pnames[1]) : []
@@ -270,6 +316,7 @@ function MultiEventViewer(props: MultiEventViewerProps) {
         ) : (
           <ScrollArea onScroll={handleOnScroll} scrollPrimitiveRef={eventContainerRef} className="h-full w-full">
             {renderedEvents}
+            <div ref={bottomRef} />
           </ScrollArea>
             )
         }
@@ -284,10 +331,38 @@ function MultiEventViewer(props: MultiEventViewerProps) {
       </div>
       <form
         id="chatBox"
-        className="h-8 mt-2 rounded-md flex flex-row"
+        className="h-8 mt-2 rounded-md flex flex-row relative"
         onSubmit={handleChatSubmit}
       >
+        {showCommandPopup && (
+          <div className="absolute bottom-full mb-1 left-0 w-full rounded-md border bg-popover p-1 shadow-md z-20">
+            {matchedCommand ? (
+              <div className="flex w-full items-start gap-2 px-2 py-1.5 text-sm">
+                <span className="font-mono font-medium shrink-0">{matchedCommand.name}</span>
+                {matchedCommand.params && <span className="text-muted-foreground font-mono">{matchedCommand.params}</span>}
+                <span className="text-muted-foreground ml-auto truncate">{matchedCommand.description}</span>
+              </div>
+            ) : (
+              filteredCommands.map((cmd, i) => (
+                <button
+                  key={cmd.name}
+                  type="button"
+                  className={
+                    "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-sm text-left cursor-pointer " +
+                    (i === selectedCommandIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/50")
+                  }
+                  onMouseDown={e => { e.preventDefault(); selectCommand(cmd) }}
+                >
+                  <span className="font-mono font-medium shrink-0">{cmd.name}</span>
+                  {cmd.params && <span className="text-muted-foreground font-mono">{cmd.params}</span>}
+                  <span className="text-muted-foreground ml-auto truncate">{cmd.description}</span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
         <Input
+          ref={chatInputRef}
           type="text"
           className="h-8 rounded-md flex mr-1"
           disabled={!canSendMessages}
@@ -297,7 +372,8 @@ function MultiEventViewer(props: MultiEventViewerProps) {
               : "Cannot send messages until connected or logged in with discord..."
           }
           value={chatMessage}
-          onChange={e => setChatMessage(e.target.value)}
+          onChange={e => { setChatMessage(e.target.value); setPopupDismissed(false) }}
+          onKeyDown={handleChatKeyDown}
         />
         <Button className="h-8 w-1/12 rounded-md flex" disabled={!canSendMessages}>
           Send

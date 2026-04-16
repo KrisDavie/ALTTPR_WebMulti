@@ -12,19 +12,39 @@ export const apiSlice = createApi({
   tagTypes: ["User", "Sessions", "PlayerInfo"],
   endpoints: builder => ({
     uploadMultiData: builder.mutation({
-      query: ({ data, tournament, flags }) => {
+      query: ({ data, password, tournament, flags }) => {
         const body = new FormData()
         body.append("file", data)
         body.append("Content-Type", "multipart/form-data")
         body.append("game", 'z3')
         body.append("tournament", tournament)
         body.append("flags", JSON.stringify(flags))
+        if (password) body.append("password", password)
         return {
           url: "/multidata",
           method: "POST",
           body: body,
         }
       },
+      invalidatesTags: ["Sessions"],
+    }),
+    uploadMultiDataFromUrl: builder.mutation({
+      query: ({ url, password, tournament, flags }: {
+        url: string
+        password?: string
+        tournament: boolean
+        flags: Record<string, boolean>
+      }) => ({
+        url: "/multidata_url",
+        method: "POST",
+        body: {
+          url,
+          game: "z3",
+          tournament,
+          flags: JSON.stringify(flags),
+          ...(password ? { password } : {}),
+        },
+      }),
       invalidatesTags: ["Sessions"],
     }),
     authUser: builder.query({
@@ -181,6 +201,7 @@ export const apiSlice = createApi({
 
 export const {
   useUploadMultiDataMutation,
+  useUploadMultiDataFromUrlMutation,
   useSendForfeitMutation,
   useSendLogMessageMutation,
   useGetPlayersQuery,

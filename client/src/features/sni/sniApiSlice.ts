@@ -242,12 +242,17 @@ export const sniApiSlice = createApi({
         )
 
         let writeResponse
-        // for (let i = 0; i < arg.memVals.length; i++) {
         state = queryApi.getState() as AccessedState
         while (state.sni.itemQueue.length > 0) {
           state = queryApi.getState() as AccessedState
           if (state.multiworld.receiving_paused) {
+            // Release the receiving lock so SRAM reads can continue sending updates to the server
+            updateReceiving(queryApi.dispatch, false)
             await new Promise(r => setTimeout(r, 500))
+            state = queryApi.getState() as AccessedState
+            if (state.sni.itemQueue.length > 0) {
+              updateReceiving(queryApi.dispatch, true)
+            }
             continue
           }
           const memVal = state.sni.itemQueue[0]
