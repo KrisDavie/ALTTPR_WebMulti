@@ -537,11 +537,15 @@ def get_session(
     return get_session_info(db, crud.get_session(db, mw_session_id), user.id)
 
 
-@app.get("/users/{user_id}/sessions", response_model=list[schemas.MWSessionInfo])
+@app.get("/users/{user_id}/sessions", response_model=schemas.PaginatedSessions)
 def get_user_sessions(
     db: Annotated[Session, Depends(get_db)],
     user_id: int,
     user_info: Annotated[tuple[models.User, str], Depends(verify_session_token)],
+    page: int = 1,
+    page_size: int = 10,
+    sort_by: str = "createdTimestamp",
+    sort_dir: str = "desc",
 ):
     user, token = user_info
     if not user:
@@ -551,16 +555,29 @@ def get_user_sessions(
     if user.id != user_id and not user.is_superuser:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
+    page_size = min(max(page_size, 1), 100)
+    page = max(page, 1)
+    skip = (page - 1) * page_size
+
+    if sort_by not in ("createdTimestamp", "lastChangeTimestamp", "race"):
+        sort_by = "createdTimestamp"
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "desc"
+
     if user.is_superuser:
-        all_sessions = sorted(crud.get_sessions(db), key=lambda x: x.created_at)
+        all_sessions, total = crud.get_sessions_paginated(db, skip=skip, limit=page_size, sort_by=sort_by, sort_dir=sort_dir)
     else:
-        all_sessions = sorted(
-            crud.get_user_sessions(db, user.id), key=lambda x: x.created_at
-        )
+        all_sessions, total = crud.get_user_sessions_paginated(db, user.id, skip=skip, limit=page_size, sort_by=sort_by, sort_dir=sort_dir)
+
     sessions = []
     for session in all_sessions:
         sessions.append(get_session_info(db, session, user.id))
-    return sessions
+    return schemas.PaginatedSessions(
+        items=sessions,
+        total=total,
+        page=page,
+        pageSize=page_size,
+    )
 
 
 def is_multidata_valid(multidata: dict) -> bool:

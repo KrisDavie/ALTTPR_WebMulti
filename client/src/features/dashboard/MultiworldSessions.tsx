@@ -1,15 +1,17 @@
 import {
   ColumnDef,
+  SortingState,
   flexRender,
   getCoreRowModel,
-  getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table"
 
-import { MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal } from "lucide-react"
 import { skipToken } from "@reduxjs/toolkit/query/react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,16 +70,25 @@ export interface ISession {
   race: boolean
 }
 
+export interface IPaginatedSessions {
+  items: ISession[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export const columns: ColumnDef<ISession>[] = [
   {
     accessorKey: "id",
     header: "ID",
+    enableSorting: false,
   },
   {
     accessorKey: "players",
     header: () => (
       <div className="flex items-center justify-center">Players</div>
     ),
+    enableSorting: false,
     cell: ({ row }) => {
       const playerNames = row.original.players
         .map(player => player.playerName)
@@ -92,12 +103,14 @@ export const columns: ColumnDef<ISession>[] = [
   {
     accessorKey: "status",
     header: "Status",
+    enableSorting: false,
   },
   {
     id: "progress",
     header: () => (
       <div className="flex items-center justify-center">Progress</div>
     ),
+    enableSorting: false,
     cell: ({ row }) => {
       const players = row.original.players
       const totcr = players.reduce(
@@ -120,6 +133,7 @@ export const columns: ColumnDef<ISession>[] = [
     header: () => (
       <div className="flex items-center justify-center">Completed</div>
     ),
+    enableSorting: false,
     cell: ({ row }) => {
       const players = row.original.players
       const completed = players.filter(player => player.goalCompleted).length
@@ -156,9 +170,19 @@ export const columns: ColumnDef<ISession>[] = [
   },
   {
     accessorKey: "createdTimestamp",
-    header: () => (
-      <div className="flex items-center justify-center">Created</div>
-    ),
+    header: ({ column }) => {
+      return (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Created
+            {column.getIsSorted() === "asc" ? <ArrowUp className="ml-1 h-4 w-4" /> : column.getIsSorted() === "desc" ? <ArrowDown className="ml-1 h-4 w-4" /> : <ArrowUpDown className="ml-1 h-4 w-4" />}
+          </Button>
+        </div>
+      )
+    },
     cell: ({ row }) => {
       return (
         <div className="flex items-center justify-center text-center">
@@ -169,9 +193,19 @@ export const columns: ColumnDef<ISession>[] = [
   },
   {
     accessorKey: "lastChangeTimestamp",
-    header: () => (
-      <div className="flex items-center justify-center">Last Change</div>
-    ),
+    header: ({ column }) => {
+      return (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Last Change
+            {column.getIsSorted() === "asc" ? <ArrowUp className="ml-1 h-4 w-4" /> : column.getIsSorted() === "desc" ? <ArrowDown className="ml-1 h-4 w-4" /> : <ArrowUpDown className="ml-1 h-4 w-4" />}
+          </Button>
+        </div>
+      )
+    },
     cell: ({ row }) => {
       return (
         <div className="flex items-center justify-center text-center">
@@ -182,7 +216,19 @@ export const columns: ColumnDef<ISession>[] = [
   },
   {
     accessorKey: "race",
-    header: () => <div className="flex items-center justify-center">Race?</div>,
+    header: ({ column }) => {
+      return (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Race?
+            {column.getIsSorted() === "asc" ? <ArrowUp className="ml-1 h-4 w-4" /> : column.getIsSorted() === "desc" ? <ArrowDown className="ml-1 h-4 w-4" /> : <ArrowUpDown className="ml-1 h-4 w-4" />}
+          </Button>
+        </div>
+      )
+    },
     cell: ({ row }) => {
       return (
         <div className="flex items-center justify-center">
@@ -233,23 +279,43 @@ export const columns: ColumnDef<ISession>[] = [
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  pageCount: number
+  page: number
+  onPageChange: (page: number) => void
+  sorting: SortingState
+  onSortingChange: (sorting: SortingState) => void
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  pageCount,
+  page,
+  onPageChange,
+  sorting,
+  onSortingChange,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    manualSorting: true,
+    onSortingChange: updater => {
+      const next = typeof updater === "function" ? updater(sorting) : updater
+      onSortingChange(next)
+      onPageChange(1)
+    },
+    state: {
+      sorting,
+    },
+    manualPagination: true,
+    pageCount,
   })
 
   return (
     <div className="flex flex-col w-full">
       <div className="flex rounded-md border w-full">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id}>
@@ -302,16 +368,31 @@ export function DataTable<TData, TValue>({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
         >
           Previous
         </Button>
+        <div className="flex items-center gap-1 text-sm">
+          <span className="text-muted-foreground">Page</span>
+          <Input
+            type="number"
+            min={1}
+            max={pageCount}
+            value={page}
+            onChange={e => {
+              const val = Number(e.target.value)
+              if (val >= 1 && val <= pageCount) onPageChange(val)
+            }}
+            className="h-8 w-16 text-center"
+          />
+          <span className="text-muted-foreground">of {pageCount}</span>
+        </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= pageCount}
         >
           Next
         </Button>
@@ -320,10 +401,16 @@ export function DataTable<TData, TValue>({
   )
 }
 
+const PAGE_SIZE = 10
+
 export const MultiworldSessions = () => {
   const user = useAppSelector(state => state.user)
-  const { data: sessions, isLoading } = useGetAllSessionsQuery(
-    user.id !== 0 ? user.id : skipToken,
+  const [page, setPage] = useState(1)
+  const [sorting, setSorting] = useState<SortingState>([])
+  const sortBy = sorting.length > 0 ? sorting[0].id : undefined
+  const sortDir = sorting.length > 0 ? (sorting[0].desc ? "desc" : "asc") : undefined
+  const { data, isLoading, isFetching } = useGetAllSessionsQuery(
+    user.id !== 0 ? { userId: user.id, page, pageSize: PAGE_SIZE, sortBy, sortDir } : skipToken,
   )
   if (isLoading) {
     return (
@@ -333,5 +420,18 @@ export const MultiworldSessions = () => {
       </div>
     )
   }
-  return <DataTable columns={columns} data={sessions ?? []} />
+  const pageCount = data ? Math.ceil(data.total / PAGE_SIZE) : 1
+  return (
+    <div className={isFetching ? "opacity-60 pointer-events-none" : ""}>
+      <DataTable
+        columns={columns}
+        data={data?.items ?? []}
+        pageCount={pageCount}
+        page={page}
+        onPageChange={setPage}
+        sorting={sorting}
+        onSortingChange={setSorting}
+      />
+    </div>
+  )
 }

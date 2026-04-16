@@ -3,7 +3,7 @@ import json
 import logging
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert as postgres_upsert
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, desc, asc, select
 
 from . import models, schemas
 
@@ -320,12 +320,12 @@ def get_sessions(db: Session, skip: int = 0, limit: int = 0, game_id: int = 1):
     return all_sessions.offset(skip).limit(limit).all()
 
 
-def get_user_sessions(db: Session, user_id: int, skip: int = 0, limit: int = 0):
-    # Owned and joined sessions
+def _user_sessions_query(db: Session, user_id: int):
+    """Base query for sessions a user owns or has joined."""
     user = db.query(models.User).filter(models.User.id == user_id).first()
     bot_ids = [bot.id for bot in user.bots] if user and user.bots else []
 
-    all_sessions = db.query(models.MWSession).outerjoin(
+    return db.query(models.MWSession).outerjoin(
         models.UserSessions, models.MWSession.id == models.UserSessions.session_id
     ).outerjoin(models.User, models.User.id == models.UserSessions.user_id).filter(
         or_(
@@ -334,9 +334,45 @@ def get_user_sessions(db: Session, user_id: int, skip: int = 0, limit: int = 0):
             models.MWSession.owners.any(models.User.id.in_(bot_ids))
         )
     )
+
+
+def get_user_sessions(db: Session, user_id: int, skip: int = 0, limit: int = 0):
+    q = _user_sessions_query(db, user_id)
     if limit <= 0:
-        return all_sessions.offset(skip).all()
-    return all_sessions.offset(skip).limit(limit).all()
+        return q.offset(skip).all()
+    return q.offset(skip).limit(limit).all()
+
+
+SORT_COLUMNS = {
+    "createdTimestamp": models.MWSession.created_at,
+    "race": models.MWSession.tournament,
+    "lastChangeTimestamp": (
+        select(func.coalesce(func.max(models.Event.timestamp), models.MWSession.created_at))
+        .where(models.Event.session_id == models.MWSession.id)
+        .correlate(models.MWSession)
+        .scalar_subquery()
+    ),
+}
+
+
+def _apply_sort(q, sort_by: str = "createdTimestamp", sort_dir: str = "desc"):
+    col = SORT_COLUMNS.get(sort_by, models.MWSession.created_at)
+    order = desc(col) if sort_dir == "desc" else asc(col)
+    return q.order_by(order)
+
+
+def get_sessions_paginated(db: Session, skip: int = 0, limit: int = 10, game_id: int = 1, sort_by: str = "createdTimestamp", sort_dir: str = "desc"):
+    q = db.query(models.MWSession).filter(models.MWSession.game_id == game_id)
+    total = q.count()
+    items = _apply_sort(q, sort_by, sort_dir).offset(skip).limit(limit).all()
+    return items, total
+
+
+def get_user_sessions_paginated(db: Session, user_id: int, skip: int = 0, limit: int = 10, sort_by: str = "createdTimestamp", sort_dir: str = "desc"):
+    q = _user_sessions_query(db, user_id)
+    total = q.count()
+    items = _apply_sort(q, sort_by, sort_dir).offset(skip).limit(limit).all()
+    return items, total
 
 
 def get_user_session_links(db: Session, session_id: str):

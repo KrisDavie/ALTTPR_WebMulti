@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react"
 import { APIKey, Event } from "@/app/types"
 import { EventTypes } from "@/app/types"
-import { IPlayerInfo, ISession } from "@/features/dashboard/MultiworldSessions"
+import { IPlayerInfo, ISession, IPaginatedSessions } from "@/features/dashboard/MultiworldSessions"
 import { UserState } from "../user/userSlice"
 
 const baseUrl = "/api/v1"
@@ -148,12 +148,9 @@ export const apiSlice = createApi({
     getUserName: builder.query({
       query: userId => `/users/${userId}/username`,
     }),
-    getAllSessions: builder.query<ISession[], number>({
-      query: userId => `/users/${userId}/sessions`,
+    getAllSessions: builder.query<IPaginatedSessions, { userId: number; page?: number; pageSize?: number; sortBy?: string; sortDir?: string }>({
+      query: ({ userId, page = 1, pageSize = 10, sortBy = "createdTimestamp", sortDir = "desc" }) => `/users/${userId}/sessions?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_dir=${sortDir}`,
       providesTags: ["Sessions"],
-      transformResponse: (response: ISession[]) => {
-        return response.sort((a, b) => b.createdTimestamp - a.createdTimestamp)
-      },
     }),
     getSession: builder.query<ISession, string>({
       query: sessionId => `/session/${sessionId}`,

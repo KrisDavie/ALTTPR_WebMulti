@@ -239,4 +239,9 @@ class MWSessionInfo(BaseModel):
     featureFlags: Features
     race: bool
 
-    
+
+class PaginatedSessions(BaseModel):
+    items: List[MWSessionInfo]
+    total: int
+    page: int
+    pageSize: int
