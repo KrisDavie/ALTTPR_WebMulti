@@ -22,6 +22,9 @@ export interface MultiworldSliceState {
   receiving_paused?: boolean
   init_complete?: boolean
   sram_updating_on_server: boolean
+  readyCheckActive: boolean
+  readyCheckTimestamp: number | null
+  readyPlayers: number[]
 }
 
 const initialState: MultiworldSliceState = {
@@ -45,6 +48,9 @@ const initialState: MultiworldSliceState = {
   receiving_paused: false,
   init_complete: false,
   sram_updating_on_server: false,
+  readyCheckActive: false,
+  readyCheckTimestamp: null,
+  readyPlayers: [],
 }
 
 export const multiworldSlice = createSlice({
@@ -82,6 +88,9 @@ export const multiworldSlice = createSlice({
     resumeReceiving: state => {
       state.receiving_paused = false
     },
+    syncPauseState: (state, action) => {
+      state.receiving_paused = action.payload
+    },
     setPlayerInfo: (state, action) => {
       state.player_id = action.payload.player_id
       state.rom_name = action.payload.rom_name
@@ -107,6 +116,26 @@ export const multiworldSlice = createSlice({
     },
     setFlags: (state, action) => {
       state.flags = action.payload
+    },
+    startReadyCheck: (state, action) => {
+      state.readyCheckActive = true
+      state.readyCheckTimestamp = action.payload
+      state.readyPlayers = []
+    },
+    addReadyPlayer: (state, action) => {
+      if (!state.readyPlayers.includes(action.payload)) {
+        state.readyPlayers.push(action.payload)
+      }
+    },
+    removeReadyPlayer: (state, action) => {
+      state.readyPlayers = state.readyPlayers.filter(p => p !== action.payload)
+    },
+    sendReadyResponse: () => {},
+    sendUnreadyResponse: () => {},
+    clearReadyCheck: (state) => {
+      state.readyCheckActive = false
+      state.readyCheckTimestamp = null
+      state.readyPlayers = []
     },
   },
   extraReducers: builder => {
@@ -142,6 +171,13 @@ export const {
   setPlayerType,
   setConnectionState,  
   setFileName,
+  startReadyCheck,
+  addReadyPlayer,
+  removeReadyPlayer,
+  sendReadyResponse,
+  sendUnreadyResponse,
+  clearReadyCheck,
+  syncPauseState,
 } = multiworldSlice.actions
 
 // export const multiworldActions = multiworldSlice.actions

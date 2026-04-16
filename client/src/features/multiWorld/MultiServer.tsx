@@ -16,7 +16,7 @@ import * as z from "zod"
 import { useUploadMultiDataMutation, useUploadMultiDataFromUrlMutation } from "../api/apiSlice"
 
 import { useNavigate } from "react-router-dom"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleTrigger } from "@radix-ui/react-collapsible"
 import { CollapsibleContent } from "@/components/ui/collapsible"
@@ -25,6 +25,7 @@ import { ChevronsUpDown, Link } from "lucide-react"
 interface MultiServerProps {
   setSelectedMode: (mode: string) => void
   multidataUrl?: string
+  droppedFiles?: FileList | null
 }
 
 const allFlags = [
@@ -36,7 +37,7 @@ const allFlags = [
 ]
 
 function MultiServer(props: MultiServerProps) {
-  const { setSelectedMode, multidataUrl } = props
+  const { setSelectedMode, multidataUrl, droppedFiles } = props
   const navigate = useNavigate()
   const [uploadMultiData] = useUploadMultiDataMutation()
   const [uploadMultiDataFromUrl] = useUploadMultiDataFromUrlMutation()
@@ -65,6 +66,12 @@ function MultiServer(props: MultiServerProps) {
       flags: ["chat", "pauseRecieving", "missingCmd", "duping", "forfeit"],
     },
   })
+
+  useEffect(() => {
+    if (droppedFiles && droppedFiles.length > 0) {
+      form.setValue("file", droppedFiles, { shouldValidate: true })
+    }
+  }, [droppedFiles, form])
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     setSubmitError(null)
@@ -128,7 +135,7 @@ function MultiServer(props: MultiServerProps) {
             <FormField
               control={form.control}
               name="file"
-              render={({ field: { onChange }, ...field }) => (
+              render={({ field: { onChange, value }, ...field }) => (
                 <FormItem>
                   <FormLabel htmlFor="file">Multiworld Data</FormLabel>
                   <FormControl>
@@ -139,6 +146,9 @@ function MultiServer(props: MultiServerProps) {
                       onChange={event => onChange(event.target.files)}
                     />
                   </FormControl>
+                  {value?.[0] && value instanceof FileList && (
+                    <p className="text-sm text-muted-foreground">Selected: {value[0].name}</p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

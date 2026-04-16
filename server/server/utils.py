@@ -181,6 +181,8 @@ def get_session_players_info_from_db(
             userName = user.username
             colour = user.colour
 
+        receiving_paused = crud.is_player_receiving_paused(db, session.id, player_id)
+
         player_datas.append(
             schemas.PlayerInfo(
                 playerNumber=player_id,
@@ -197,6 +199,7 @@ def get_session_players_info_from_db(
                 usernameAsPlayerName=usernameAsPlayerName,
                 userName=userName,
                 colour=colour,
+                receivingPaused=receiving_paused,
             )
         )
     return player_datas

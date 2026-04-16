@@ -44,6 +44,8 @@ function MultiEventViewer(props: MultiEventViewerProps) {
   const allCommands = useMemo(() => [
     { name: "/countdown", description: "Start a countdown timer", params: "[seconds]", example: "/countdown 5" },
     { name: "/missing", description: "Show unchecked locations", params: "", example: "/missing", disabled: !flags.missingCmd },
+    { name: "/ready_check", description: "Start a ready check for all players", params: "", example: "/ready_check" },
+    { name: "/cancel_ready", description: "Cancel the active ready check", params: "", example: "/cancel_ready" },
   ], [flags.missingCmd])
 
 
@@ -83,7 +85,10 @@ function MultiEventViewer(props: MultiEventViewerProps) {
             from_player == -1 ||
             (from_player == to_player && !showSamePlayerItems))) ||
         // Chat messages
-        (event_type === "chat" && !showChat)
+        (event_type === "chat" && !showChat) ||
+        // Filter out ready check ephemeral events
+        (event_type === "chat" && event.event_data &&
+          ["ready_check", "ready_response", "unready_response", "ready_check_cancel"].includes(event.event_data.type))
       ) {
         return false
       }

@@ -729,3 +729,20 @@ def get_player_connection_events(db: Session, session_id: str, player_id: int):
         .all()
         # .first()
     )
+
+
+def is_player_receiving_paused(db: Session, session_id: str, player_id: int) -> bool:
+    latest = (
+        db.query(models.Event)
+        .filter(models.Event.session_id == session_id)
+        .filter(models.Event.from_player == player_id)
+        .filter(
+            or_(
+                models.Event.event_type == models.EventTypes.player_pause_receive,
+                models.Event.event_type == models.EventTypes.player_resume_receive,
+            )
+        )
+        .order_by(models.Event.timestamp.desc())
+        .first()
+    )
+    return latest is not None and latest.event_type == models.EventTypes.player_pause_receive

@@ -37,6 +37,7 @@ import { LoadingSpinner } from "../../components/ui/spinner"
 export interface IPlayerInfo {
   playerNumber: number
   playerName: string
+  connected: boolean
   collectionRate: number
   totalLocations: number
   goalCompleted: boolean
@@ -48,6 +49,7 @@ export interface IPlayerInfo {
   usernameAsPlayerName?: boolean
   userName?: string
   colour?: string
+  receivingPaused?: boolean
 }
 
 export interface IFeatures {

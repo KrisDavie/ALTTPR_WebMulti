@@ -421,6 +421,34 @@ async def websocket_endpoint(
                     ),
                 )
                 continue
+            elif payload["type"] == "ready_response":
+                crud.create_event(
+                    db,
+                    schemas.EventCreate(
+                        session_id=session.id,
+                        event_type=models.EventTypes.chat,
+                        from_player=player_id,
+                        to_player=-1,
+                        item_id=-1,
+                        location=-1,
+                        event_data={"message": "", "type": "ready_response", "player_id": player_id, "private": False},
+                    ),
+                )
+                continue
+            elif payload["type"] == "unready_response":
+                crud.create_event(
+                    db,
+                    schemas.EventCreate(
+                        session_id=session.id,
+                        event_type=models.EventTypes.chat,
+                        from_player=player_id,
+                        to_player=-1,
+                        item_id=-1,
+                        location=-1,
+                        event_data={"message": "", "type": "unready_response", "player_id": player_id, "private": False},
+                    ),
+                )
+                continue
             elif payload["type"] == "chat":
                 ev_data = {"message": sanitize_chat_message(payload["data"]), "type": "chat"}
                 if user_type == "non_player":
@@ -432,6 +460,8 @@ async def websocket_endpoint(
                     )[0] not in [
                         "/countdown",
                         "/missing",
+                        "/ready_check",
+                        "/cancel_ready",
                     ]:  # TODO: Move this to a list variable somewher
                         system_chat(
                             "Chat is disabled in this session",
@@ -525,6 +555,20 @@ async def websocket_endpoint(
                                 db,
                                 private=player_id,
                             )
+                    elif command[0] == "/ready_check":
+                        system_chat(
+                            "",
+                            session,
+                            db,
+                            type="ready_check",
+                        )
+                    elif command[0] == "/cancel_ready":
+                        system_chat(
+                            "",
+                            session,
+                            db,
+                            type="ready_check_cancel",
+                        )
                     else:
                         await websocket.send_json(
                             {"type": "chat", "data": "Unknown command"}

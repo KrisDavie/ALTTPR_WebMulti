@@ -12,6 +12,12 @@ import {
   updateMemory,
   setConnectionState,
   setFlags,
+  startReadyCheck,
+  addReadyPlayer,
+  removeReadyPlayer,
+  sendReadyResponse,
+  sendUnreadyResponse,
+  clearReadyCheck,
 } from "./multiworldSlice"
 import { nanoid } from "@reduxjs/toolkit"
 import { log } from "../loggerSlice"
@@ -130,6 +136,22 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
             break
 
           case "chat":
+            if (data.data.event_data?.type === "ready_check") {
+              api.dispatch(startReadyCheck(data.data.timestamp * 1000))
+              break
+            }
+            if (data.data.event_data?.type === "ready_response") {
+              api.dispatch(addReadyPlayer(data.data.event_data.player_id))
+              break
+            }
+            if (data.data.event_data?.type === "unready_response") {
+              api.dispatch(removeReadyPlayer(data.data.event_data.player_id))
+              break
+            }
+            if (data.data.event_data?.type === "ready_check_cancel") {
+              api.dispatch(clearReadyCheck())
+              break
+            }
             api.dispatch(
               log(
                 `Chat message (${data.data.from_player}}) : ${data.data.event_data.message}`,
@@ -246,6 +268,14 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
             break
           case "flags":
             api.dispatch(setFlags(data.data))
+            break
+
+          case "ready_check":
+            api.dispatch(startReadyCheck(data.data.timestamp))
+            break
+
+          case "ready_response":
+            api.dispatch(addReadyPlayer(data.data.player_id))
             break
 
           default:
@@ -370,6 +400,22 @@ export const multiworldMiddleware: Middleware<object, RootState> = api => {
         }),
       )
       api.dispatch(setInitComplete(true))
+    }
+
+    if (sendReadyResponse.match(action)) {
+      socket?.send(
+        JSON.stringify({
+          type: "ready_response",
+        }),
+      )
+    }
+
+    if (sendUnreadyResponse.match(action)) {
+      socket?.send(
+        JSON.stringify({
+          type: "unready_response",
+        }),
+      )
     }
 
     return next(action)

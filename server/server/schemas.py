@@ -220,6 +220,7 @@ class PlayerInfo(BaseModel):
     usernameAsPlayerName: bool = False
     userName: str | None = None
     colour: str | None = None
+    receivingPaused: bool = False
 
 class Features(BaseModel):
     chat: bool
